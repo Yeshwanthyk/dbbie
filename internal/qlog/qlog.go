@@ -31,6 +31,7 @@ type Entry struct {
 	TS        time.Time      `json:"ts"`
 	Conn      string         `json:"conn"`
 	Driver    string         `json:"driver"`
+	Session   string         `json:"session,omitempty"`
 	Source    string         `json:"source"`
 	Actor     string         `json:"actor"`
 	Title     string         `json:"title"`
@@ -49,10 +50,7 @@ type Log struct {
 	conn string
 }
 
-func Open(conn string) (*Log, error) {
-	if conn == "" || conn == "." || conn == ".." || strings.ContainsAny(conn, "/\\\x00\r\n") {
-		return nil, errors.New("invalid query log connection name")
-	}
+func StateDir() (string, error) {
 	dir := os.Getenv("DBBIE_STATE_DIR")
 	if dir == "" {
 		if state := os.Getenv("XDG_STATE_HOME"); state != "" {
@@ -60,15 +58,26 @@ func Open(conn string) (*Log, error) {
 		} else {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 			dir = filepath.Join(home, ".local", "state", "dbbie")
 		}
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
+		return "", err
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func Open(conn string) (*Log, error) {
+	if conn == "" || conn == "." || conn == ".." || strings.ContainsAny(conn, "/\\\x00\r\n") {
+		return nil, errors.New("invalid query log connection name")
+	}
+	dir, err := StateDir()
+	if err != nil {
 		return nil, err
 	}
 	l := &Log{path: filepath.Join(dir, conn+".jsonl"), conn: conn}

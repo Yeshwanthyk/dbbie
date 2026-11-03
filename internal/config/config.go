@@ -51,7 +51,7 @@ func Load(path string) (File, error) {
 }
 
 func Save(path string, cfg File) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := privateDir(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -68,10 +68,22 @@ func Save(path string, cfg File) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func (f File) Find(name string) (Connection, bool) {

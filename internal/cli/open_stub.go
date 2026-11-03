@@ -11,12 +11,15 @@ import (
 	"github.com/yeshwanthyk/dbbie/internal/ui"
 )
 
+var runTUI = ui.Run
+
 func openTUI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := newFlags("open")
 	fs.Bool("json", !isTerminal(stdout), "print errors as JSON")
 	connName := fs.String("conn", "", "saved connection name")
 	driverRaw := fs.String("driver", "", "driver")
 	dsn := fs.String("dsn", "", "dsn")
+	save := fs.String("save", "", "save ad-hoc connection under this name")
 	themeName := fs.String("theme", "midnight", "theme name")
 	limit := fs.Int("limit", 100, "preview row limit")
 	sqlText := fs.String("sql", "", "initial read-only SQL")
@@ -36,12 +39,16 @@ func openTUI(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	if err != nil {
 		return err
 	}
-	return withOpenDB(ctx, dbSpec{ConnName: *connName, Driver: *driverRaw, DSN: *dsn}, func(ctx context.Context, kind db.Kind, conn *sql.DB) error {
-		name := *connName
+	spec := dbSpec{ConnName: *connName, Driver: *driverRaw, DSN: *dsn}
+	if err := saveDBSpec(&spec, *save); err != nil {
+		return err
+	}
+	return withOpenDB(ctx, spec, func(ctx context.Context, kind db.Kind, conn *sql.DB) error {
+		name := spec.ConnName
 		if name == "" {
 			name = "adhoc"
 		}
-		return ui.Run(ctx, ui.Options{Kind: kind, DB: conn, Theme: resolvedTheme, Limit: *limit, InitialSQL: *sqlText,
+		return runTUI(ctx, ui.Options{Kind: kind, DB: conn, Theme: resolvedTheme, Limit: *limit, InitialSQL: *sqlText,
 			Connection: name, Follow: *follow, Recent: *recent, NoLog: *noLog})
 	})
 }

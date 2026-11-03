@@ -18,6 +18,7 @@ type logSummary struct {
 	Title    string      `json:"title"`
 	Why      string      `json:"why"`
 	SQL      string      `json:"sql"`
+	Session  string      `json:"session,omitempty"`
 	RowCount int         `json:"rowCount"`
 	Error    *qlog.Error `json:"error"`
 }
@@ -43,7 +44,7 @@ func listLog(args []string, stdout io.Writer) error {
 	}
 	summaries := make([]logSummary, 0, len(entries))
 	for _, e := range entries {
-		summaries = append(summaries, logSummary{e.ID, e.TS, e.Actor, e.Title, e.Why, e.SQL, e.RowCount, e.Error})
+		summaries = append(summaries, logSummary{ID: e.ID, TS: e.TS, Actor: e.Actor, Title: e.Title, Why: e.Why, SQL: e.SQL, Session: e.Session, RowCount: e.RowCount, Error: e.Error})
 	}
 	if *jsonOut {
 		return encode(stdout, summaries)
