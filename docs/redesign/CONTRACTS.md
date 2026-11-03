@@ -1,7 +1,7 @@
 # Redesign contracts
 
 These are the shared interfaces between the redesign slices. Change them only through the coordinator.
-The visual and interaction target is the mockup at `/tmp/dbbie-design/redesign.html`. Open it in a browser
+The visual and interaction target is the mockup at `docs/redesign/mockup.html`. Open it in a browser
 and drive it with vim keys.
 
 ## Slices and ownership
