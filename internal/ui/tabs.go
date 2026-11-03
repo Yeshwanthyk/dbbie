@@ -78,7 +78,7 @@ func (s *state) showTab() {
 	why := ""
 	s.queryPane.SetTitle(" query ")
 	if t.origin != nil {
-		s.queryPane.SetTitle(fmt.Sprintf(" query · %s · %s ", tview.Escape(t.origin.ID), t.origin.TS.Local().Format("2006-01-02 15:04:05")))
+		s.queryPane.SetTitle(fmt.Sprintf(" query · ◆ agent · %s · %s ", tview.Escape(t.origin.ID), t.origin.TS.Local().Format("2006-01-02 15:04")))
 		parts := []string{t.origin.Actor}
 		if t.origin.Title != "" {
 			parts = append(parts, t.origin.Title)
@@ -86,7 +86,7 @@ func (s *state) showTab() {
 		if t.origin.Why != "" {
 			parts = append(parts, "why: "+t.origin.Why)
 		}
-		why = fmt.Sprintf("[%s]%s[::-]", s.theme.Agent, tview.Escape(strings.Join(parts, " · ")))
+		why = fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(strings.Join(parts, " · ")))
 		s.agentNotice = ""
 	}
 	s.why.SetText(why)
@@ -109,7 +109,6 @@ func (s *state) showTab() {
 		}
 	}
 	s.grid.Select(min(max(1, cursor.Row), max(1, len(s.viewRows))), cursor.Col)
-	s.resultPane.SetTitle(" results ")
 	if t.record {
 		s.renderRecord()
 		s.resultPages.SwitchToPage("record")
@@ -133,23 +132,54 @@ func (s *state) showTab() {
 }
 
 func (s *state) refreshHeader() {
+	width := s.headerWidth
+	if width == 0 {
+		width = 120
+	}
+	s.refreshHeaderWidth(width)
+}
+
+func (s *state) refreshHeaderWidth(width int) {
 	var out strings.Builder
-	fmt.Fprintf(&out, "[%s:%s:b] dbbie [::-] [%s]%s · %s [%s]●[::-] ", s.theme.Background, s.theme.Primary, s.theme.Muted, tview.Escape(s.connection), s.kind, s.theme.Success)
-	for i, t := range s.tabs {
-		fg, bg := s.theme.Muted, s.theme.Background
+	fmt.Fprintf(&out, "[%s:%s:b] dbbie [-:-:-] [%s]%s · %s [%s]●[-:-:-] ", s.theme.Background, s.theme.Primary, s.theme.Muted, tview.Escape(displayValue(s.connection)), s.kind, s.theme.Success)
+	available := width - tview.TaggedStringWidth(out.String())
+	// Keep the active tab in the viewport instead of clipping the bar at its
+	// right edge. Short titles free space for neighboring tabs.
+	first := 0
+	for i := 0; i < s.active; i++ {
+		needed := 0
+		for j := first; j <= s.active; j++ {
+			needed += min(28, tview.TaggedStringWidth(tview.Escape(displayValue(s.tabs[j].title)))+7)
+		}
+		if needed <= available {
+			break
+		}
+		first++
+	}
+	if first > 0 {
+		out.WriteString("[" + s.theme.Muted + "]‹ [-:-:-]")
+		available -= 2
+	}
+	for i := first; i < len(s.tabs); i++ {
+		t := s.tabs[i]
+		fg, bg, attr := s.theme.Muted, s.theme.Background, "BU"
 		if i == s.active {
-			fg, bg = s.theme.Text, s.theme.Panel
+			fg, bg, attr = s.theme.Text, s.theme.Selection, "bu"
 		}
 		marker := ""
 		if t.origin != nil {
 			fg = s.theme.Agent
 			marker = "◆ "
 		}
-		attr := "-"
-		if i == s.active {
-			attr = "u"
+		titleWidth := min(22, max(1, available-4-tview.TaggedStringWidth(marker)))
+		label := fmt.Sprintf(" %d %s%s ", i+1, marker, truncateCells(displayValue(t.title), titleWidth))
+		if tview.TaggedStringWidth(tview.Escape(label)) > available {
+			break
 		}
-		fmt.Fprintf(&out, "[%s:%s:%s] %d %s%s [::-]", fg, bg, attr, i+1, marker, tview.Escape(t.title))
+		// Underline is a separate tcell style property: '-' resets the
+		// attribute mask but needs an explicit U to clear this decoration.
+		fmt.Fprintf(&out, "[%s:%s:%s]%s[-:-:BU]", fg, bg, attr, tview.Escape(label))
+		available -= tview.TaggedStringWidth(tview.Escape(label))
 	}
 	s.header.SetText(out.String())
 }

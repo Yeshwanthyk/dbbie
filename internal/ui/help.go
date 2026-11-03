@@ -2,75 +2,134 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-// Keep help centered but bounded by the terminal so short terminals can scroll
-// through the whole keymap rather than clipping its last lines off screen.
+// A wide terminal gets two columns; a narrow one gets a scrollable key list.
+// The full-screen background obscures the shell so borders never collide.
 type helpFrame struct {
 	*tview.Flex
-	column *tview.Flex
-	help   *tview.TextView
+	column    *tview.Flex
+	help      *tview.TextView
+	state     *state
+	textWidth int
+	lines     int
+}
+
+type helpKey struct{ key, description string }
+
+var helpLeft = []helpKey{
+	{"", "ANYWHERE"},
+	{"Ctrl-h / Ctrl-l", "tables / results"},
+	{"gt / gT · 1–9", "next / prev / numbered tab"},
+	{"t", "fuzzy table finder"},
+	{"i", "replace SQL; Esc restores"},
+	{":", "command / SQL"},
+	{":q / :qa", "close tab / quit"},
+	{"q", "close tab; quit on last"},
+	{"Ctrl-c", "cancel query; quit if idle"},
+	{"? / Esc", "help / close overlay"},
+	{"Tab", "focus results"},
+	{"", ""},
+	{"", "TABLES"},
+	{"j / k · ↑ / ↓", "move through tables"},
+	{"gg / G", "first / last table"},
+	{"/", "fuzzy filter names"},
+	{"Enter / Esc", "keep / clear filter"},
+	{"Enter / o", "open here / new tab"},
+	{"K", "describe columns"},
+}
+
+var helpRight = []helpKey{
+	{"", "RESULTS"},
+	{"hjkl · arrows", "move by cell"},
+	{"w / b · 0 / $", "next / prev / first / last"},
+	{"gg / G", "first / last row"},
+	{"Ctrl-d / Ctrl-u", "half-page down / up"},
+	{"/ · n / N", "filter; next / prev match"},
+	{"]a / [a", "next / prev agent tab"},
+	{"Enter / Esc", "record view / back"},
+	{"j / k", "prev / next record"},
+	{"yy / Y", "copy cell / row JSON"},
+	{"s / S", "sort ascending / descending"},
+	{"f / Esc", "equal-cell filter / clear"},
+	{"", ""},
+	{"", "SQL EDITING"},
+	{"Ctrl-u", "clear draft"},
+	{"Enter / Esc", "run / cancel and restore"},
+	{"", ""},
+	{"", "THEMES"},
+	{":theme", "selection needs restart"},
+}
+
+func (s *state) helpColumn(keys []helpKey, width int) []string {
+	lines := make([]string, len(keys))
+	for i, entry := range keys {
+		if entry.key == "" {
+			lines[i] = fmt.Sprintf("[%s::b]%s[-:-:-]", s.theme.Muted, entry.description)
+			continue
+		}
+		key := entry.key + strings.Repeat(" ", max(1, 18-tview.TaggedStringWidth(tview.Escape(entry.key))))
+		description := truncateCells(entry.description, max(1, width-tview.TaggedStringWidth(tview.Escape(key))))
+		lines[i] = fmt.Sprintf("[%s]%s[-:-:-][%s]%s[-:-:-]", s.theme.Primary, tview.Escape(key), s.theme.Text, tview.Escape(description))
+	}
+	return lines
 }
 
 func (f *helpFrame) Draw(screen tcell.Screen) {
 	_, _, width, height := f.GetRect()
-	f.ResizeItem(f.column, min(82, max(1, width-2)), 0)
-	f.column.ResizeItem(f.help, min(38, max(1, height-2)), 0)
+	cardWidth := min(100, max(1, width-4))
+	innerWidth := max(1, cardWidth-6)
+	if innerWidth != f.textWidth {
+		f.textWidth = innerWidth
+		var lines []string
+		if innerWidth >= 90 {
+			colWidth := (innerWidth - 4) / 2
+			left, right := f.state.helpColumn(helpLeft, colWidth), f.state.helpColumn(helpRight, colWidth)
+			for i := 0; i < max(len(left), len(right)); i++ {
+				l, r := "", ""
+				if i < len(left) {
+					l = left[i]
+				}
+				if i < len(right) {
+					r = right[i]
+				}
+				lines = append(lines, l+strings.Repeat(" ", max(4, colWidth+4-tview.TaggedStringWidth(l)))+r)
+			}
+		} else {
+			lines = append(f.state.helpColumn(helpLeft, innerWidth), "")
+			lines = append(lines, f.state.helpColumn(helpRight, innerWidth)...)
+		}
+		f.lines = len(lines)
+		f.help.SetText(strings.Join(lines, "\n"))
+	}
+	f.ResizeItem(f.column, cardWidth, 0)
+	f.column.ResizeItem(f.help, min(f.lines+4, max(1, height-4)), 0)
 	f.Flex.Draw(screen)
 }
 
 func (s *state) toggleHelp() {
 	if s.helpOpen {
 		s.helpOpen = false
-		// Pages delegates focus to the main layout when the modal is removed;
-		// restore the original pane after that delegation.
 		s.pages.RemovePage("help")
 		s.app.SetFocus(s.helpReturn)
 		return
 	}
 	s.helpReturn = s.app.GetFocus()
 	s.helpOpen = true
-	help := s.text().SetScrollable(true).SetWrap(true)
+	help := s.text().SetScrollable(true).SetWrap(false)
 	s.pane(help.Box, "keys · Esc closes")
+	help.SetBorderPadding(1, 1, 2, 2)
 	s.bindFocus(help.Box, help.Box)
-	help.SetText(fmt.Sprintf(`[%s::b]ANYWHERE[::-]
- Ctrl-h / Ctrl-l    tables / results
- gt / gT · 1–9      next / previous / numbered tab
- t                  fuzzy table finder
- i                  edit SQL · Enter run · Esc leave
- :                  command / SQL · :q close · :qa quit
- q                  close tab; quit on last tab (normal input only)
- Ctrl-c             cancel query; quit when idle
- ? · Esc            toggle help / close overlay
- Tab                focus results
-
-[%s::b]TABLES[::-]
- j / k · ↑ / ↓      move through tables
- gg / G             first / last table
- /                  fuzzy filter · Enter keep · Esc clear
- Enter / o          open here / new tab (agent tabs preserved)
- K                  describe columns in new tab
-
-[%s::b]RESULTS[::-]
- h j k l · arrows   move by cell
- w / b · 0 / $      next / previous · first / last column
- gg / G             first / last row
- Ctrl-d / Ctrl-u    half-page down / up
- / · n / N          row filter · next / previous match
- ]a / [a            next / previous agent tab
-
- Enter · Esc        record view / back (j/k moves rows)
- yy / Y             copy cell / row JSON (OSC52)
- s / S              sort fetched rows ascending / descending
- f · Esc            toggle equal-cell filter / clear filters
-
- :theme             theme selection requires restart
-`, s.theme.Primary, s.theme.Primary, s.theme.Primary))
-	column := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(nil, 0, 1, false).AddItem(help, 38, 0, true).AddItem(nil, 0, 1, false)
-	modal := &helpFrame{Flex: tview.NewFlex().AddItem(nil, 0, 1, false).AddItem(column, 82, 0, true).AddItem(nil, 0, 1, false), column: column, help: help}
+	column := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(nil, 0, 1, false).AddItem(help, 23, 0, true).AddItem(nil, 0, 1, false)
+	modal := &helpFrame{Flex: tview.NewFlex().AddItem(nil, 0, 1, false).AddItem(column, 100, 0, true).AddItem(nil, 0, 1, false), column: column, help: help, state: s}
+	// Flex does not clear its background by default; explicitly make the
+	// modal and its vertical margins opaque, not just the help text itself.
+	modal.Box = tview.NewBox().SetBackgroundColor(s.theme.TCell(s.theme.Background))
+	column.Box = tview.NewBox().SetBackgroundColor(s.theme.TCell(s.theme.Background))
 	s.pages.AddPage("help", modal, true, true)
 	s.app.SetFocus(help)
 }

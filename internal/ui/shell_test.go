@@ -220,7 +220,7 @@ func TestSidebarNavigationCountsAndSchemas(t *testing.T) {
 	if s.sidebar.GetCell(0, 0).Text != "auth_permission" {
 		t.Fatal("single schema should omit prefix")
 	}
-	if s.sidebar.GetCell(0, 1).Text != "2.2k" || s.sidebar.GetCell(2, 1).Text != "empty" || s.sidebar.GetCell(3, 1).Text != "" {
+	if strings.TrimSpace(s.sidebar.GetCell(0, 1).Text) != "2.2k" || strings.TrimSpace(s.sidebar.GetCell(2, 1).Text) != "empty" || strings.TrimSpace(s.sidebar.GetCell(3, 1).Text) != "" {
 		t.Fatal("incorrect counts")
 	}
 	emptyFG, _, _ := s.sidebar.GetCell(2, 0).Style.Decompose()

@@ -82,31 +82,49 @@ func (s *state) filterTables(filter string) {
 		if table.EstimatedRows == 0 {
 			base = s.theme.Muted
 		}
-		var highlighted strings.Builder
-		next := 0
-		for i, r := range []rune(name) {
-			if next < len(positions) && positions[next] == i {
-				fmt.Fprintf(&highlighted, "[%s::b]%s[%s::-]", s.theme.Accent, tview.Escape(string(r)), base)
-				next++
-			} else {
-				highlighted.WriteString(tview.Escape(string(r)))
-			}
-		}
-		s.sidebar.SetCell(row, 0, tview.NewTableCell(highlighted.String()).SetTextColor(s.theme.TCell(base)).SetExpansion(1))
+		s.sidebar.SetCell(row, 0, tview.NewTableCell(s.highlightTableName(name, positions, base)).SetTextColor(s.theme.TCell(base)).SetExpansion(1))
 		s.sidebar.SetCell(row, 1, tview.NewTableCell(compactRows(table.EstimatedRows)).SetTextColor(s.theme.TCell(s.theme.Muted)).SetAlign(tview.AlignRight))
 	}
 	s.sideWidth = min(44, max(24, longest+10))
-	// Cap the name column before tview sizes columns. Without this, one long
-	// table name pushes the counts entirely off screen in the flat list.
-	for row := range s.visibleTables {
-		s.sidebar.GetCell(row, 0).SetMaxWidth(s.sideWidth - 10)
-	}
+	s.fitSidebar(s.sideWidth - 4)
 	s.body.ResizeItem(s.sidePane, s.sideWidth, 0)
 	s.sidePane.SetTitle(fmt.Sprintf(" tables %d/%d ", len(s.visibleTables), len(s.tables)))
 	if len(s.visibleTables) == 0 {
 		s.sidebar.SetCell(0, 0, tview.NewTableCell("no tables match").SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))
 	}
 	s.sidebar.Select(0, 0).SetOffset(0, 0)
+}
+
+func (s *state) highlightTableName(name string, positions []int, base string) string {
+	var highlighted strings.Builder
+	next := 0
+	for i, r := range []rune(name) {
+		if next < len(positions) && positions[next] == i {
+			fmt.Fprintf(&highlighted, "[%s::b]%s[%s::-]", s.theme.Accent, tview.Escape(string(r)), base)
+			next++
+		} else {
+			highlighted.WriteString(tview.Escape(string(r)))
+		}
+	}
+	return highlighted.String()
+}
+
+func (s *state) fitSidebar(width int) {
+	countWidth := 5 // reserve the same right-aligned column for empty / counts
+	for _, table := range s.visibleTables {
+		countWidth = max(countWidth, len(compactRows(table.EstimatedRows)))
+	}
+	nameWidth := max(1, width-countWidth-1)
+	for row, table := range s.visibleTables {
+		name := truncateCells(s.tableName(table), nameWidth)
+		positions, _ := fuzzyMatches(s.tableName(table), s.tableFilter.GetText())
+		base := s.theme.Text
+		if table.EstimatedRows == 0 {
+			base = s.theme.Muted
+		}
+		s.sidebar.GetCell(row, 0).SetText(s.highlightTableName(name, positions, base)).SetMaxWidth(nameWidth)
+		s.sidebar.GetCell(row, 1).SetText(fmt.Sprintf("%*s", countWidth, compactRows(table.EstimatedRows))).SetMaxWidth(countWidth)
+	}
 }
 
 func (s *state) selectedTable() (catalog.Table, bool) {

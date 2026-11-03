@@ -68,7 +68,7 @@ func TestSampledWidthsAndCellStyles(t *testing.T) {
 		t.Fatal("header missing bold/separator")
 	}
 	fg, bg, attr := s.grid.GetCell(1, 1).Style.Decompose()
-	if fg != s.theme.TCell(s.theme.Muted) || attr&tcell.AttrDim == 0 || bg != s.theme.TCell(s.theme.Selection) {
+	if fg != s.theme.TCell(s.theme.Muted) || attr != tcell.AttrNone || bg != s.theme.TCell(s.theme.Selection) {
 		t.Fatal("NULL or row selection style missing")
 	}
 	fg, _, _ = s.grid.GetCell(2, 2).Style.Decompose()
@@ -281,9 +281,9 @@ func TestEmptyAndErrorNoticesOnScreen(t *testing.T) {
 	screen, text := drawShell(t, s)
 	x, y, w, h := s.grid.GetInnerRect()
 	r, _, style, _ := screen.GetContent(x+(w-6)/2, y+1+(h-1)/2)
-	fg, _, attr := style.Decompose()
-	if r != '0' || fg != s.theme.TCell(s.theme.Muted) || attr&tcell.AttrDim == 0 || !strings.Contains(text, "id") || !strings.Contains(s.resultPane.GetTitle(), "0 rows") {
-		t.Fatal("empty notice must be centered/dim with header intact")
+	fg, _, _ := style.Decompose()
+	if r != '0' || fg != s.theme.TCell(s.theme.Muted) || !strings.Contains(text, "id") || !strings.Contains(s.resultPane.GetTitle(), "0 rows") {
+		t.Fatal("empty notice must be centered/muted with header intact")
 	}
 	enter(s)
 	typeKeys(s, "yyYsSf")
