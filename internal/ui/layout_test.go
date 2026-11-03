@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/yeshwanthyk/dbbie/internal/catalog"
+	"github.com/yeshwanthyk/dbbie/internal/qlog"
 )
 
 func drawShell(t *testing.T, s *state) (tcell.SimulationScreen, string) {
@@ -56,7 +57,7 @@ func TestLongTableNameDoesNotHideCounts(t *testing.T) {
 
 func TestAgentWhyAndSQLRenderAboveResults(t *testing.T) {
 	s := newTestState(t, nil)
-	s.current().origin = &origin{ID: "q_42", Actor: "agent", Why: "check empty tables"}
+	s.current().origin = &qlog.Entry{ID: "q_42", Actor: "agent", Why: "check empty tables"}
 	s.current().sql = "select 42"
 	s.showTab()
 	_, text := drawShell(t, s)

@@ -78,7 +78,7 @@ Usage:
   dbbie query (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) --sql <sql> [--limit 100] [--timeout 10s] [--why <text>] [--title <text>] [--no-log] [--json]
   dbbie log --conn <name> [--limit 20] [--json]
   dbbie show <id> --conn <name> [--offset 0] [--limit 100] [--json]
-  dbbie open (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) [--sql <sql>]
+  dbbie open (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) [--sql <sql>] [--follow] [--recent 5] [--no-log]
   dbbie tools [--json]
   dbbie serve-mcp (not implemented)
 

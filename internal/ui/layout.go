@@ -124,6 +124,9 @@ func (s *state) focusTables() {
 }
 
 func (s *state) focusQuery() {
+	if s.current().origin != nil {
+		s.newTab("query", s.current().sql, nil)
+	}
 	s.queryPages.SwitchToPage("edit")
 	s.app.SetFocus(s.query)
 }
@@ -160,6 +163,13 @@ func (s *state) refreshMode() {
 		s.modeLine.ResizeItem(s.prompts, 0, 1)
 		s.prompts.AddItem(s.command, 0, 1, true)
 	}
+	if s.current().origin != nil {
+		mode += " ◆ AGENT"
+		color = s.theme.Agent
+	}
+	if focus == s.command || focus == s.search {
+		s.modeLine.ResizeItem(s.status, tview.TaggedStringWidth(mode)+4, 0)
+	}
 	message := s.message
 	if t := s.current(); t.cancel != nil {
 		frames := []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
@@ -169,6 +179,12 @@ func (s *state) refreshMode() {
 	hints = s.formatHints(hints)
 	if message != "" {
 		hints = tview.Escape(message) + " · " + hints
+	}
+	if s.agentNotice != "" {
+		hints = fmt.Sprintf("[%s]%s[::-]", s.theme.Agent, tview.Escape(s.agentNotice))
+		if focus == s.command || focus == s.search {
+			s.modeLine.ResizeItem(s.status, tview.TaggedStringWidth(mode)+tview.TaggedStringWidth(hints)+5, 0)
+		}
 	}
 	s.status.SetText(fmt.Sprintf("[%s:%s:b] %s [::-] [%s]%s[::-]", s.theme.Background, color, mode, s.theme.Muted, hints))
 }
