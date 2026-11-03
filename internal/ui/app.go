@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/yeshwanthyk/dbbie/internal/catalog"
 	"github.com/yeshwanthyk/dbbie/internal/db"
+	"github.com/yeshwanthyk/dbbie/internal/qlog"
 	"github.com/yeshwanthyk/dbbie/internal/query"
 	"github.com/yeshwanthyk/dbbie/internal/theme"
 )
@@ -21,9 +23,11 @@ type Options struct {
 	Theme      theme.Theme
 	Limit      int
 	InitialSQL string
-	// Connection is a display name only, never a DSN. Callers without a saved
-	// connection name get the neutral "session" label.
+	// Connection is a display name only, never a DSN.
 	Connection string
+	Follow     bool
+	Recent     int // number of stored entries to restore when following; zero restores none
+	NoLog      bool
 }
 
 type tableRef struct{ Schema, Name string }
@@ -37,21 +41,40 @@ func Run(ctx context.Context, opts Options) error {
 	if err := s.loadCatalog(); err != nil {
 		return err
 	}
+	if err := s.prepareLog(opts.Follow, opts.Recent); err != nil {
+		return err
+	}
 	root := s.layout()
-	// Start only after the screen initialized. A failed terminal startup must
-	// not leave a worker waiting on an event loop that never ran.
-	started := false
-	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		s.screen = screen
-		if !started {
-			started = true
-			s.runInitialSQL(opts.InitialSQL)
-		}
-		return false
-	})
+	s.configureStartup(opts.InitialSQL, opts.Follow)
 	app.SetInputCapture(s.captureInput)
 	defer s.cancelAll()
 	return app.SetRoot(root, true).EnableMouse(true).Run()
+}
+
+func (s *state) configureStartup(initialSQL string, follow bool) {
+	started := false
+	s.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		s.screen = screen
+		if !started {
+			started = true
+			s.startupPending = true
+			// BeforeDraw holds tview's application mutex. Start on the UI
+			// update queue instead: query setup reads focus and may change it.
+			// Waiting for the first draw also avoids workers on a failed screen.
+			go s.app.QueueUpdateDraw(func() {
+				s.startupPending = false
+				if s.quitting {
+					s.stopWhenDrained()
+					return
+				}
+				s.runInitialSQL(initialSQL)
+				if follow {
+					s.startFollow()
+				}
+			})
+		}
+		return false
+	})
 }
 
 func NormalizeOptions(opts Options) Options {
@@ -93,18 +116,28 @@ func ApplyTViewTheme(t theme.Theme) {
 // Mutable state, including tabs and query completions, belongs to tview's event
 // loop. Background workers only receive immutable query inputs and contexts.
 type state struct {
-	ctx        context.Context
-	app        *tview.Application
-	kind       db.Kind
-	db         *sql.DB
-	theme      theme.Theme
-	limit      int
-	connection string
-	tabs       []*tab
-	active     int
-	runner     runnerHook
-	pending    int
-	quitting   bool
+	ctx            context.Context
+	app            *tview.Application
+	kind           db.Kind
+	db             *sql.DB
+	theme          theme.Theme
+	limit          int
+	connection     string
+	tabs           []*tab
+	active         int
+	runner         runnerHook
+	pending        int
+	quitting       bool
+	startupPending bool
+	log            *qlog.Log
+	noLog          bool
+	logOffset      int64
+	seen           map[string]bool
+	deferred       []qlog.Entry
+	follow         followHook
+	following      bool
+	followCancel   context.CancelFunc
+	agentNotice    string
 
 	header, status, why, sqlView        *tview.TextView
 	cellInfo, recordView                *tview.TextView
@@ -137,9 +170,11 @@ type state struct {
 
 func newState(ctx context.Context, app *tview.Application, opts Options) *state {
 	opts = NormalizeOptions(opts)
-	s := &state{ctx: ctx, app: app, kind: opts.Kind, db: opts.DB, theme: opts.Theme, limit: opts.Limit, connection: opts.Connection, tabs: []*tab{{title: "query"}}}
+	s := &state{ctx: ctx, app: app, kind: opts.Kind, db: opts.DB, theme: opts.Theme, limit: opts.Limit,
+		connection: opts.Connection, tabs: []*tab{{title: "query"}},
+		noLog: opts.NoLog || os.Getenv("DBBIE_NO_LOG") == "1", seen: make(map[string]bool)}
 	if s.connection == "" {
-		s.connection = "session"
+		s.connection = "adhoc"
 	}
 	s.runner = s.backgroundRunner
 	return s

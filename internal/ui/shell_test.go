@@ -13,6 +13,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/yeshwanthyk/dbbie/internal/catalog"
+	"github.com/yeshwanthyk/dbbie/internal/qlog"
 	"github.com/yeshwanthyk/dbbie/internal/query"
 )
 
@@ -120,7 +121,7 @@ func TestSidebarFuzzyFilterEnterAndOriginProtection(t *testing.T) {
 			seedTables(s)
 			old := s.current()
 			if agent {
-				old.origin = &origin{ID: "q_0042", Actor: "agent", Why: "find accounts"}
+				old.origin = &qlog.Entry{ID: "q_0042", Actor: "agent", Why: "find accounts"}
 				old.sql = "select 42"
 				s.showTab()
 			}

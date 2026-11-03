@@ -7,19 +7,16 @@ import (
 	"time"
 
 	"github.com/rivo/tview"
+	"github.com/yeshwanthyk/dbbie/internal/qlog"
 	"github.com/yeshwanthyk/dbbie/internal/query"
 )
-
-// TODO(slice D): replace *origin with *qlog.Entry once slice A lands. Do not
-// introduce a competing query-log package in the shell slice.
-type origin struct{ ID, Why, Actor string }
 
 // Every tab has the same shape; an origin makes it an agent tab, not a second
 // tab kind. Results stay attached to their tab even when another tab is active.
 type tab struct {
 	title       string
 	sql         string
-	origin      *origin
+	origin      *qlog.Entry
 	result      query.Result
 	err         error
 	cursor      gridPos
@@ -43,7 +40,7 @@ func (s *state) saveTab() {
 	s.current().sql = s.query.GetText()
 }
 
-func (s *state) newTab(title, sql string, from *origin) {
+func (s *state) newTab(title, sql string, from *qlog.Entry) {
 	s.saveTab()
 	s.tabs = append(s.tabs, &tab{title: title, sql: sql, origin: from})
 	s.active = len(s.tabs) - 1
@@ -79,8 +76,18 @@ func (s *state) showTab() {
 	s.query.SetText(t.sql)
 	s.sqlView.SetText(tview.Escape(t.sql))
 	why := ""
+	s.queryPane.SetTitle(" query ")
 	if t.origin != nil {
-		why = fmt.Sprintf("[%s]%s · %s[::-]", s.theme.Agent, tview.Escape(t.origin.Actor), tview.Escape(t.origin.Why))
+		s.queryPane.SetTitle(fmt.Sprintf(" query · %s · %s ", tview.Escape(t.origin.ID), t.origin.TS.Local().Format("2006-01-02 15:04:05")))
+		parts := []string{t.origin.Actor}
+		if t.origin.Title != "" {
+			parts = append(parts, t.origin.Title)
+		}
+		if t.origin.Why != "" {
+			parts = append(parts, "why: "+t.origin.Why)
+		}
+		why = fmt.Sprintf("[%s]%s[::-]", s.theme.Agent, tview.Escape(strings.Join(parts, " · ")))
+		s.agentNotice = ""
 	}
 	s.why.SetText(why)
 	whyHeight := 0
