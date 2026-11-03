@@ -18,6 +18,9 @@ type Theme struct {
 	Text       string `json:"text"`
 	Muted      string `json:"muted"`
 	Danger     string `json:"danger"`
+	Selection  string `json:"selection"`
+	Success    string `json:"success"`
+	Agent      string `json:"agent"`
 }
 
 var themes = map[string]Theme{
@@ -31,6 +34,9 @@ var themes = map[string]Theme{
 		Text:       "#F0F6FC",
 		Muted:      "#8B949E",
 		Danger:     "#FF7B72",
+		Selection:  "#1F2A37",
+		Success:    "#7EE787",
+		Agent:      "#D2A8FF",
 	},
 	"light": {
 		Name:       "light",
@@ -42,6 +48,9 @@ var themes = map[string]Theme{
 		Text:       "#111827",
 		Muted:      "#64748B",
 		Danger:     "#B91C1C",
+		Selection:  "#E2E8F0",
+		Success:    "#15803D",
+		Agent:      "#7C3AED",
 	},
 	"contrast": {
 		Name:       "contrast",
@@ -53,6 +62,9 @@ var themes = map[string]Theme{
 		Text:       "#FFFFFF",
 		Muted:      "#BDBDBD",
 		Danger:     "#FF4D4D",
+		Selection:  "#262626",
+		Success:    "#00FF7F",
+		Agent:      "#D6A3FF",
 	},
 }
 
