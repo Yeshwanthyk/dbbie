@@ -104,7 +104,15 @@ func (s *state) fitColumns(width int) {
 		if s.current().sorted && s.current().sortColumn == col {
 			nameWidth += 2
 		}
-		minimum[col] = min(widths[col], max(4, min(16, nameWidth)))
+		// Below these widths a cell stops being readable; past them the grid scrolls sideways.
+		minimum[col] = min(widths[col], max(8, min(16, nameWidth)))
+		if strings.EqualFold(column.Database, "UUID") {
+			minimum[col] = min(widths[col], max(9, min(16, nameWidth)))
+		}
+		if strings.Contains(strings.ToUpper(column.Database), "TIME") || strings.EqualFold(column.Database, "DATE") {
+			// A clipped timestamp ("2026-10-05 …") hides the part that differs; keep it whole and scroll instead.
+			minimum[col] = widths[col]
+		}
 		wanted[col] = max(widths[col], nameWidth)
 		for _, row := range s.viewRows[:min(widthSampleRows, len(s.viewRows))] {
 			wanted[col] = max(wanted[col], tview.TaggedStringWidth(tview.Escape(compactValue(rowValue(row, col), column))))
