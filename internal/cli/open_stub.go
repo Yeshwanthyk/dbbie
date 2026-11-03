@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"database/sql"
-	"flag"
 	"io"
 
 	"github.com/yeshwanthyk/dbbie/internal/db"
@@ -12,8 +11,8 @@ import (
 )
 
 func openTUI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("open", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs := newFlags("open")
+	fs.Bool("json", !isTerminal(stdout), "print errors as JSON")
 	connName := fs.String("conn", "", "saved connection name")
 	driverRaw := fs.String("driver", "", "driver")
 	dsn := fs.String("dsn", "", "dsn")
