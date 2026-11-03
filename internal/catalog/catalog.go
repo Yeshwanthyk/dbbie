@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/yeshwanthyk/dbbie/internal/db"
 )
@@ -73,11 +74,35 @@ func scanTables(ctx context.Context, conn *sql.DB, query string) ([]Table, error
 	}
 	defer rows.Close()
 
+	// Legacy queries return only table identity. MySQL adds an estimate, and
+	// Postgres also adds the live-row fallback for never-analyzed tables.
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
 	var tables []Table
 	for rows.Next() {
-		var t Table
-		if err := rows.Scan(&t.Schema, &t.Name, &t.Type); err != nil {
+		t := Table{EstimatedRows: -1}
+		var estimate sql.NullFloat64
+		var liveRows sql.NullInt64
+		dest := []any{&t.Schema, &t.Name, &t.Type}
+		if len(columns) >= 4 {
+			dest = append(dest, &estimate)
+		}
+		if len(columns) >= 5 {
+			dest = append(dest, &liveRows)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
+		}
+		if t.Type == "BASE TABLE" {
+			switch {
+			case estimate.Valid && estimate.Float64 >= 0:
+				t.EstimatedRows = int64(math.Round(estimate.Float64))
+			case liveRows.Valid && liveRows.Int64 >= 0:
+				t.EstimatedRows = liveRows.Int64
+			}
 		}
 		tables = append(tables, t)
 	}
@@ -109,13 +134,16 @@ func scanColumns(ctx context.Context, conn *sql.DB, query, schema, table string)
 }
 
 const postgresTablesSQL = `
-select table_schema, table_name, table_type
-from information_schema.tables
-where table_schema not in ('pg_catalog', 'information_schema')
-order by table_schema, table_name`
+select t.table_schema, t.table_name, t.table_type, c.reltuples, s.n_live_tup
+from information_schema.tables t
+left join pg_catalog.pg_namespace n on n.nspname = t.table_schema
+left join pg_catalog.pg_class c on c.relnamespace = n.oid and c.relname = t.table_name
+left join pg_catalog.pg_stat_user_tables s on s.relid = c.oid
+where t.table_schema not in ('pg_catalog', 'information_schema')
+order by t.table_schema, t.table_name`
 
 const mysqlTablesSQL = `
-select table_schema, table_name, table_type
+select table_schema, table_name, table_type, table_rows
 from information_schema.tables
 where table_schema not in ('mysql', 'information_schema', 'performance_schema', 'sys')
 order by table_schema, table_name`
