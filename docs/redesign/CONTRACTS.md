@@ -99,3 +99,58 @@ There is one tab type, defined by C1 in `internal/ui/tabs.go`. It holds a title,
 `*qlog.Entry` origin (D sets it for agent tabs), the last result or error, the cursor position, the row
 filter text, and a running-query cancel func. Queries run off the UI goroutine through
 `app.QueueUpdateDraw`. Tests use a synchronous runner hook.
+
+## 5. Sessions and saved connections (F1 store + CLI, then F2 TUI)
+
+A **session** is a named, ordered list of queries on one saved connection, which an agent or a human
+can come back to, read, and re-run. Sessions span one connection only; each item records it anyway.
+
+### Store (package `internal/session`, owned by F1)
+
+- File per session: `<stateDir>/sessions/<name>.json`, where stateDir is the same as qlog's
+  (`$DBBIE_STATE_DIR`, else `$XDG_STATE_HOME/dbbie`, else `~/.local/state/dbbie`). Directory 0700, files 0600.
+  Writes are atomic (temp file + rename) under a per-session flock.
+- Name: `^[a-z0-9][a-z0-9._-]{0,63}$`. Anything else is `invalid`.
+- JSON, never containing a DSN:
+
+```json
+{"v":1,"name":"refund-bug","title":"Why refunds stuck","conn":"local","driver":"postgres",
+ "createdBy":"agent","created":"…","updated":"…",
+ "items":[{"n":1,"title":"pending by age","why":"…","sql":"select …","logId":"q_0042",
+           "added":"…","addedBy":"agent"}]}
+```
+
+- `n` is 1-based and stable (removing an item doesn't renumber the rest).
+- `logId` points at the latest qlog entry for that item (the stored result). Re-running updates it.
+- API: `Open(name) (*Session, error)`, `Create(name, title, conn, driver, actor) (*Session, error)`
+  (`ErrExists`), `List() ([]Summary, error)` (sorted by updated desc), `Add(name, Item) (Item, error)`,
+  `Remove(name, n) error`, `SetLogID(name, n, logID) error`, `Delete(name) error`, `ErrNotFound`.
+- qlog `Entry` gains `"session": "<name>"` (omitempty; v stays 1; old lines still parse).
+
+### CLI (F1)
+
+- `dbbie session new <name> --conn X [--title T]`
+- `dbbie session ls [--json]` → name, title, conn, items, updated, createdBy.
+- `dbbie session show <name> [--json]` → session plus each item's stored result summary (rowCount, error).
+- `dbbie session add <name> <logId> [--title T]` pins an existing log entry (copies its sql/why/title).
+- `dbbie session rm <name> [--item N]`
+- `dbbie session run <name> [--only N] [--limit] [--timeout]` re-runs items read-only, logs each run with
+  `session`, updates `logId`, prints per-item results (JSON default when not a TTY).
+- `dbbie query … --session <name>` (or env `DBBIE_SESSION`) appends the query as an item after it runs,
+  creating the session on first use with that `--conn`. A failed/rejected query is still added (with its
+  error) so the trail is complete. The session conn must match `--conn`, else `invalid`.
+- Connections: `dbbie connect <name> <driver> <dsn>` (exists); add `dbbie connect --rm <name>`,
+  `dbbie connect --rename <old> <new>`; `dbbie open/query --driver D --dsn X --save <name>` saves it.
+  `dbbie connections` never prints DSNs. Config file mode 0600, dir 0700.
+- `dbbie tools` manifest and README document all of the above for agents.
+
+### TUI (F2)
+
+- `dbbie open --session <name>`: one tab per item in order, rendered from the stored log entry (no re-run),
+  tab title = item title or `#n`, why line shows `session <name> · #n · why`.
+- `r` re-runs the current tab's SQL in place (logged; if the tab belongs to a session, updates that item).
+- `:save <name> [title]` saves open tabs (SQL + latest log ids) as a session; `:add` adds the current tab
+  to the active session. `:sessions` opens a fuzzy picker (Enter opens the session's tabs).
+- `:conn` opens a fuzzy picker of saved connections; switching reloads the catalog and keeps tabs.
+  `dbbie open` with no `--conn` shows the picker first (with one saved connection, it just opens it).
+- Agent tabs from `--follow` show their session name when the entry has one.
