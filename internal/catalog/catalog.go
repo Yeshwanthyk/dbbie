@@ -12,6 +12,8 @@ type Table struct {
 	Schema string `json:"schema"`
 	Name   string `json:"name"`
 	Type   string `json:"type"`
+	// EstimatedRows is a planner estimate, not an exact count. -1 means unknown.
+	EstimatedRows int64 `json:"estimatedRows"`
 }
 
 type Column struct {
