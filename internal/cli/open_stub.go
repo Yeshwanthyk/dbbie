@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -23,6 +24,9 @@ func openSpec(spec dbSpec, sessionName string, connections []config.PublicConnec
 		trail, err := session.Open(sessionName)
 		if err != nil {
 			return spec, false, err
+		}
+		if spec.Driver != "" || spec.DSN != "" || (spec.ConnName != "" && spec.ConnName != trail.Conn) {
+			return spec, false, fmt.Errorf("session %s uses connection %s; drop --conn/--dsn or pass --conn %s", trail.Name, trail.Conn, trail.Conn)
 		}
 		return dbSpec{ConnName: trail.Conn}, false, nil
 	}

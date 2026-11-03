@@ -284,3 +284,20 @@ func TestStateDirectoryFallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestListSkipsStrayAndCorruptFiles(t *testing.T) {
+	state := setup(t)
+	if _, err := Create("good", "", "local", "postgres", "agent"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(state, "sessions")
+	for name, body := range map[string]string{"Bad.json": "{}", "broken.json": "{not json"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := List()
+	if err != nil || len(list) != 1 || list[0].Name != "good" {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+}

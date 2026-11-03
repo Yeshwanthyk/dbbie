@@ -163,9 +163,16 @@ func TestOpenSessionUsesSessionConnectionAndDisablesRecentRestore(t *testing.T) 
 		}
 		return nil
 	}
-	for _, args := range [][]string{{"--session", "demo", "--follow"}, {"--session", "demo", "--conn", "other", "--follow"}} {
+	for _, args := range [][]string{{"--session", "demo", "--follow"}, {"--session", "demo", "--conn", "local", "--follow"}} {
 		if err := openTUI(context.Background(), args, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 			t.Fatal(err)
+		}
+	}
+	// A conflicting connection is an error, never silently replaced by the session's.
+	for _, args := range [][]string{{"--session", "demo", "--conn", "other"}, {"--session", "demo", "--driver", "postgres", "--dsn", "x"}} {
+		err := openTUI(context.Background(), args, &bytes.Buffer{}, &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), "session demo uses connection local") {
+			t.Fatalf("%v: err=%v", args, err)
 		}
 	}
 	if opened != 2 {

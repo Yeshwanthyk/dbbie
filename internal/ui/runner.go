@@ -158,6 +158,7 @@ func (s *state) startWork(t *tab, work queryWork) {
 			s.seen[result.ID] = true
 		}
 		if t.runID == generation {
+			warning := ""
 			t.notice = ""
 			t.logID, t.logConn = "", ""
 			if strings.HasPrefix(result.ID, "q_") {
@@ -169,7 +170,7 @@ func (s *state) startWork(t *tab, work queryWork) {
 				}
 				if t.sessionName != "" {
 					if updateErr := session.SetLogID(t.sessionName, t.itemN, result.ID); updateErr != nil {
-						err = fmt.Errorf("session result update failed: %w", updateErr)
+						warning = fmt.Sprintf("ran %s, but session %s #%d was not updated: %v", result.ID, t.sessionName, t.itemN, updateErr)
 					}
 				}
 			}
@@ -191,6 +192,9 @@ func (s *state) startWork(t *tab, work queryWork) {
 				}
 				if t.origin != nil || t.sessionName != "" {
 					s.showTab()
+				}
+				if warning != "" {
+					s.setMessage(warning)
 				}
 			}
 		}

@@ -232,11 +232,10 @@ func List() ([]Summary, error) {
 		}
 		name := strings.TrimSuffix(file.Name(), ".json")
 		s, err := Open(name)
-		if errors.Is(err, ErrNotFound) {
-			continue
-		} // concurrently deleted
 		if err != nil {
-			return nil, err
+			// Concurrently deleted, a stray file, or a corrupt one: one bad file
+			// must not hide every other session. `session show` still reports it.
+			continue
 		}
 		out = append(out, Summary{s.Name, s.Title, s.Conn, len(s.Items), s.Updated, s.CreatedBy})
 	}

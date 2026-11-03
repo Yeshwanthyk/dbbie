@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yeshwanthyk/dbbie/internal/qlog"
 	"github.com/yeshwanthyk/dbbie/internal/session"
@@ -107,14 +108,23 @@ func (s *state) saveSession(name, title string) {
 		s.setMessage("sessions require a saved connection; :conn to choose one")
 		return
 	}
-	items := make([]session.Item, len(s.tabs))
-	for i, t := range s.tabs {
+	// Blank tabs have no SQL to save or re-run; leave them out of the session.
+	var saved []*tab
+	var items []session.Item
+	for _, t := range s.tabs {
+		if strings.TrimSpace(t.sql) == "" {
+			continue
+		}
 		item, err := s.tabItem(t)
 		if err != nil {
 			s.setMessage(err.Error())
 			return
 		}
-		items[i] = item
+		saved, items = append(saved, t), append(items, item)
+	}
+	if len(items) == 0 {
+		s.setMessage("nothing to save: every tab is empty")
+		return
 	}
 	if _, err := session.Create(name, title, s.connection, string(s.kind), "human"); err != nil {
 		s.setMessage(err.Error())
@@ -134,7 +144,7 @@ func (s *state) saveSession(name, title string) {
 		}
 		items[i] = added
 	}
-	for i, t := range s.tabs {
+	for i, t := range saved {
 		t.sessionName, t.itemN, t.sessionConn = name, items[i].N, s.connection
 	}
 	s.activeSession, s.sessionConn = name, s.connection
@@ -152,6 +162,14 @@ func (s *state) addToSession() {
 		return
 	}
 	s.saveTab()
+	if t := s.current(); t.sessionName == s.activeSession {
+		s.setMessage(fmt.Sprintf("already in session %s · #%d; r re-runs it", t.sessionName, t.itemN))
+		return
+	}
+	if strings.TrimSpace(s.current().sql) == "" {
+		s.setMessage("nothing to add: this tab has no SQL")
+		return
+	}
 	item, err := s.tabItem(s.current())
 	if err == nil {
 		item, err = session.Add(s.activeSession, item)

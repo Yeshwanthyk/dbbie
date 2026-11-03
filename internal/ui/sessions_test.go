@@ -500,3 +500,53 @@ func TestStartupConnectionPickerAppearsWithoutOpeningDatabase(t *testing.T) {
 		t.Fatal("startup picker cancellation did not quit")
 	}
 }
+
+func TestSaveSkipsBlankTabsAndAddRefusesDuplicates(t *testing.T) {
+	conn, _, cleanup := mockDB(t)
+	defer cleanup()
+	s := sessionState(t, conn)
+	s.current().sql = "  " // the untouched starting tab
+	s.saveSession("empty", "")
+	if _, err := session.Open("empty"); !errors.Is(err, session.ErrNotFound) || !strings.Contains(s.message, "nothing to save") {
+		t.Fatalf("blank-only save created a session: %s", s.message)
+	}
+	s.newTab("real", "select 2", nil)
+	s.saveSession("mixed", "")
+	trail, err := session.Open("mixed")
+	if err != nil || len(trail.Items) != 1 || trail.Items[0].SQL != "select 2" {
+		t.Fatalf("trail=%+v err=%v", trail, err)
+	}
+	if s.tabs[0].sessionName != "" || s.tabs[1].itemN != 1 {
+		t.Fatal("blank tab was bound to a session item")
+	}
+	typeKeys(s, ":add")
+	enter(s)
+	if trail, _ = session.Open("mixed"); len(trail.Items) != 1 || !strings.Contains(s.message, "already in session mixed") {
+		t.Fatalf(":add duplicated the tab: items=%d msg=%s", len(trail.Items), s.message)
+	}
+	s.newTab("blank", "", nil)
+	typeKeys(s, ":add")
+	enter(s)
+	if trail, _ = session.Open("mixed"); len(trail.Items) != 1 || !strings.Contains(s.message, "no SQL") {
+		t.Fatalf(":add stored a blank tab: msg=%s", s.message)
+	}
+}
+
+func TestRerunShowsResultWhenSessionItemIsGone(t *testing.T) {
+	conn, mock, cleanup := mockDB(t)
+	defer cleanup()
+	s := sessionState(t, conn)
+	createTrail(t, s, "demo")
+	s.openSession("demo")
+	if err := session.Remove("demo", 1); err != nil { // another terminal removed it
+		t.Fatal(err)
+	}
+	expectQuery(mock, "select 7", sqlmock.NewRows([]string{"fresh"}).AddRow(8))
+	typeKeys(s, "r")
+	if s.current().err != nil || s.grid.GetCell(1, 0).Text != "8" {
+		t.Fatalf("successful rerun shown as failure: err=%v", s.current().err)
+	}
+	if !strings.Contains(s.message, "was not updated") {
+		t.Fatalf("missing warning: %s", s.message)
+	}
+}
