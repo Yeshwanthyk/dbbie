@@ -1,25 +1,23 @@
 package cli
 
 import (
-	"encoding/json"
-	"errors"
-	"flag"
+	"fmt"
 	"io"
 
 	"github.com/yeshwanthyk/dbbie/internal/agent"
 )
 
 func tools(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("tools", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	jsonOut := fs.Bool("json", false, "print JSON")
+	fs := newFlags("tools")
+	jsonOut := fs.Bool("json", !isTerminal(stdout), "print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if !*jsonOut {
-		return errors.New("tools is agent-facing; pass --json")
+	if *jsonOut {
+		return encode(stdout, agent.Tools())
 	}
-	enc := json.NewEncoder(stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(agent.Tools())
+	for _, tool := range agent.Tools() {
+		fmt.Fprintf(stdout, "%s\t%s\n", tool.Name, tool.Description)
+	}
+	return nil
 }
