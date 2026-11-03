@@ -65,7 +65,7 @@ func outputJSON(args []string, stdout io.Writer) bool {
 		return jsonOut
 	}
 	start := 1
-	if args[0] == "connect" {
+	if args[0] == "connect" && len(args) > 1 && !strings.HasPrefix(args[1], "-") {
 		start = 4 // the first three arguments are positional, including a secret
 	}
 	for i := start; i < len(args); i++ {
@@ -92,7 +92,7 @@ func outputJSON(args []string, stdout io.Writer) bool {
 
 func commandSecrets(args []string) []string {
 	var secrets []string
-	if len(args) >= 4 && args[0] == "connect" {
+	if len(args) >= 4 && args[0] == "connect" && !strings.HasPrefix(args[1], "-") {
 		secrets = append(secrets, args[3])
 	}
 	for i := 1; i < len(args); i++ {

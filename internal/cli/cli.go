@@ -26,8 +26,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	if err != nil {
+		var rendered *renderedError
+		alreadyRendered := errors.As(err, &rendered)
 		err = commandError(errorCode(err), redact(err.Error(), secrets))
-		if jsonOut {
+		if jsonOut && !alreadyRendered {
 			if encodeErr := encode(out, map[string]any{"error": errorDetail(err)}); encodeErr != nil {
 				return encodeErr
 			}
@@ -54,6 +56,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return describe(ctx, args[1:], stdout)
 	case "query":
 		return runQuery(ctx, args[1:], stdout, stderr)
+	case "session":
+		return sessions(ctx, args[1:], stdout)
 	case "log":
 		return listLog(args[1:], stdout)
 	case "show":
@@ -72,17 +76,27 @@ func usage(w io.Writer) {
 
 Usage:
   dbbie connect <name> <driver> <dsn> [--json]
+  dbbie connect --rm <name> [--json]
+  dbbie connect --rename <old> <new> [--json]
   dbbie connections [--json]
   dbbie tables (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) [--match <glob>] [--json]
   dbbie describe (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) --table <table> [--schema <schema>] [--json]
-  dbbie query (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) --sql <sql> [--limit 100] [--timeout 10s] [--why <text>] [--title <text>] [--no-log] [--json]
+  dbbie query (--conn <name> | --driver <postgres|mysql> --dsn <dsn> [--save <name>]) --sql <sql> [--session <name>] [--limit 100] [--timeout 10s] [--why <text>] [--title <text>] [--no-log] [--json]
+  dbbie session new <name> --conn <name> [--title <text>] [--json]
+  dbbie session ls [--json]
+  dbbie session show <name> [--json]
+  dbbie session add <name> <logId> [--title <text>] [--json]
+  dbbie session rm <name> [--item N] [--json]
+  dbbie session run <name> [--only N] [--limit 100] [--timeout 10s] [--json]
   dbbie log --conn <name> [--limit 20] [--json]
   dbbie show <id> --conn <name> [--offset 0] [--limit 100] [--json]
-  dbbie open (--conn <name> | --driver <postgres|mysql> --dsn <dsn>) [--sql <sql>] [--follow] [--recent 5] [--no-log]
+  dbbie open (--conn <name> | --driver <postgres|mysql> --dsn <dsn> [--save <name>]) [--sql <sql>] [--follow] [--recent 5] [--no-log]
   dbbie tools [--json]
   dbbie serve-mcp (not implemented)
 
-JSON is the default when stdout is not a terminal; --json=false prints human-readable output.`)
+JSON is the default when stdout is not a terminal; --json=false prints human-readable output.
+DBBIE_SESSION selects query's default session; --session overrides it. Sessions require a saved connection
+and query logging. session run is always read-only and logged, including rejected/failed runs.`)
 }
 
 func newFlags(name string) *flag.FlagSet {
@@ -93,38 +107,7 @@ func newFlags(name string) *flag.FlagSet {
 }
 
 func connect(args []string, stdout io.Writer) error {
-	fs := newFlags("connect")
-	jsonOut := fs.Bool("json", !isTerminal(stdout), "print JSON")
-	if len(args) < 3 {
-		return errors.New("usage: dbbie connect <name> <driver> <dsn> [--json]")
-	}
-	if err := fs.Parse(args[3:]); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return errors.New("unexpected connect arguments")
-	}
-	kind, err := db.ParseKind(args[1])
-	if err != nil {
-		return err
-	}
-	configPath, err := config.Path()
-	if err != nil {
-		return err
-	}
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return err
-	}
-	cfg.Upsert(config.Connection{Name: args[0], Driver: kind, DSN: args[2]})
-	if err := config.Save(configPath, cfg); err != nil {
-		return err
-	}
-	if *jsonOut {
-		return encode(stdout, config.PublicConnection{Name: args[0], Driver: kind})
-	}
-	fmt.Fprintf(stdout, "saved %s (%s)\n", args[0], kind)
-	return nil
+	return manageConnection(args, stdout)
 }
 
 func connections(args []string, stdout io.Writer) error {

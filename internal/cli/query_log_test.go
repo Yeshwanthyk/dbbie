@@ -26,6 +26,7 @@ func setupQuery(t *testing.T) (sqlmock.Sqlmock, string) {
 	t.Setenv("DBBIE_STATE_DIR", state)
 	t.Setenv("DBBIE_CONFIG", filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv("DBBIE_NO_LOG", "")
+	t.Setenv("DBBIE_SESSION", "")
 	t.Setenv("DBBIE_ACTOR", "")
 	p, _ := config.Path()
 	if err := config.Save(p, config.File{Connections: []config.Connection{{Name: "local", Driver: db.Postgres, DSN: "postgres://secret:password@localhost/app?sslmode=disable&test=1"}}}); err != nil {

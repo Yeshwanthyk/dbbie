@@ -17,7 +17,7 @@ func TestToolsExposeAIFirstContracts(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, name := range []string{"save_connection", "list_connections", "list_tables", "describe_table", "run_readonly_query", "list_query_log", "show_query", "open_workspace", "list_tools", "help", "serve_mcp"} {
+	for _, name := range []string{"save_connection", "remove_connection", "rename_connection", "create_session", "list_sessions", "show_session", "add_session_item", "remove_session", "run_session", "list_connections", "list_tables", "describe_table", "run_readonly_query", "list_query_log", "show_query", "open_workspace", "list_tools", "help", "serve_mcp"} {
 		if !seen[name] {
 			t.Fatalf("missing tool %s", name)
 		}
@@ -32,7 +32,7 @@ func TestManifestDescribesEveryCommandAndNewFlags(t *testing.T) {
 		}
 		commands[tool.Command[1]] = true
 		if tool.Name == "run_readonly_query" {
-			for _, flag := range []string{"--why", "--title", "--no-log"} {
+			for _, flag := range []string{"--why", "--title", "--no-log", "--session", "--save", "DBBIE_SESSION"} {
 				if !strings.Contains(tool.Description, flag) {
 					t.Fatalf("query manifest missing %s", flag)
 				}
@@ -48,7 +48,7 @@ func TestManifestDescribesEveryCommandAndNewFlags(t *testing.T) {
 			t.Fatal("show safety not described")
 		}
 	}
-	for _, command := range []string{"connect", "connections", "tables", "describe", "query", "log", "show", "open", "tools", "--help", "serve-mcp"} {
+	for _, command := range []string{"connect", "connections", "session", "tables", "describe", "query", "log", "show", "open", "tools", "--help", "serve-mcp"} {
 		if !commands[command] {
 			t.Fatalf("command %s missing from manifest", command)
 		}
