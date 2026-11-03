@@ -24,6 +24,9 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 		s.cancelOrQuit()
 		return nil
 	}
+	if s.picker != nil {
+		return s.capturePicker(event)
+	}
 	if s.helpOpen {
 		if event.Key() == tcell.KeyEsc || (event.Key() == tcell.KeyRune && event.Rune() == '?') {
 			s.toggleHelp()
@@ -169,6 +172,9 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 		s.tableFilter.SetText("")
 		s.app.SetFocus(s.tableFilter)
 		return nil
+	case 'r':
+		s.rerunTab()
+		return nil
 	case 'i':
 		s.focusQuery()
 		return nil
@@ -279,6 +285,18 @@ func (s *state) runCommand(cmd string) {
 		s.closeTab()
 	case "qa", "qall":
 		s.quit()
+	case "save":
+		if len(fields) < 2 {
+			s.setMessage("usage: :save <name> [title]")
+		} else {
+			s.saveSession(fields[1], strings.Join(fields[2:], " "))
+		}
+	case "add":
+		s.addToSession()
+	case "sessions":
+		s.pickSessions()
+	case "conn":
+		s.pickConnections()
 	case "theme":
 		s.setMessage("theme switching requires restart")
 	case "query":

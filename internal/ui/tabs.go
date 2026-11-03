@@ -17,6 +17,13 @@ type tab struct {
 	title       string
 	sql         string
 	origin      *qlog.Entry
+	sessionName string
+	itemN       int
+	sessionConn string
+	why         string
+	logID       string
+	logConn     string
+	notice      string
 	result      query.Result
 	err         error
 	cursor      gridPos
@@ -83,15 +90,25 @@ func (s *state) showTab() {
 		if t.origin.Title != "" {
 			parts = append(parts, t.origin.Title)
 		}
+		if t.origin.Session != "" {
+			parts = append(parts, "session "+t.origin.Session)
+		}
 		if t.origin.Why != "" {
 			parts = append(parts, "why: "+t.origin.Why)
 		}
 		why = fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(strings.Join(parts, " · ")))
 		s.agentNotice = ""
 	}
+	if t.sessionName != "" {
+		text := fmt.Sprintf("session %s · #%d", t.sessionName, t.itemN)
+		if t.why != "" {
+			text += " · " + t.why
+		}
+		why = fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(text))
+	}
 	s.why.SetText(why)
 	whyHeight := 0
-	if t.origin != nil {
+	if why != "" {
 		whyHeight = 1
 	}
 	s.queryPane.ResizeItem(s.why, whyHeight, 0)
@@ -121,7 +138,11 @@ func (s *state) showTab() {
 	s.refreshCell()
 	if len(t.result.Columns) == 0 && t.err == nil {
 		s.grid.Clear()
-		s.grid.SetCell(0, 0, tview.NewTableCell("Open a table or run a query").SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))
+		notice := t.notice
+		if notice == "" {
+			notice = "Open a table or run a query"
+		}
+		s.grid.SetCell(0, 0, tview.NewTableCell(notice).SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))
 	}
 	s.message = ""
 	if t.err != nil {
@@ -171,8 +192,12 @@ func (s *state) refreshHeaderWidth(width int) {
 			fg = s.theme.Agent
 			marker = "◆ "
 		}
+		title := t.title
+		if t.origin != nil && t.origin.Session != "" && t.sessionName == "" {
+			title = t.origin.Session + " · " + title
+		}
 		titleWidth := min(22, max(1, available-4-tview.TaggedStringWidth(marker)))
-		label := fmt.Sprintf(" %d %s%s ", i+1, marker, truncateCells(displayValue(t.title), titleWidth))
+		label := fmt.Sprintf(" %d %s%s ", i+1, marker, truncateCells(displayValue(title), titleWidth))
 		if tview.TaggedStringWidth(tview.Escape(label)) > available {
 			break
 		}

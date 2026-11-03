@@ -154,3 +154,16 @@ can come back to, read, and re-run. Sessions span one connection only; each item
 - `:conn` opens a fuzzy picker of saved connections; switching reloads the catalog and keeps tabs.
   `dbbie open` with no `--conn` shows the picker first (with one saved connection, it just opens it).
 - Agent tabs from `--follow` show their session name when the entry has one.
+
+#### F2 implementation deviations / guardrail additions
+
+- `open --session` rejects `--sql` and `--save` combinations rather than executing an initial query
+  alongside restored tabs. With `--follow`, unrelated `--recent` entries are not restored on top of
+  the session; new entries are still followed.
+- An empty session opens one blank draft tab (there is no result tab to select). `:save` makes the new
+  session active and binds its tabs; `:add` binds the appended tab to its new stable item number.
+- Connection/session switching waits for running work to finish or be canceled. Opening a session
+  from the picker replaces the current tabs; switching only the connection retains them.
+- Session tabs kept across `:conn` require switching back to their session's connection before `r`
+  or `:add`. `:save` rejects mixed-connection stored results rather than persisting ambiguous log ids.
+  These restrictions preserve §5's single-connection session invariant.
