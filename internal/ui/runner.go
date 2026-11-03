@@ -41,6 +41,8 @@ func (s *state) runQuery(sqlText string) {
 	t.sql = sqlText
 	s.query.SetText(sqlText)
 	t.rowFilter = ""
+	t.equalFilter, t.sorted, t.record = nil, false, false
+	s.resultPages.SwitchToPage("grid")
 	s.refreshHeader()
 	// Capture only immutable inputs; a worker must never read mutable UI state.
 	conn, limit := s.db, s.limit
@@ -70,10 +72,15 @@ func (s *state) startWork(t *tab, work queryWork) {
 		if t.runID == generation {
 			t.cancel = nil
 			t.result, t.err = result, err
+			t.record = false
 			t.cursor = gridPos{Row: 1}
 			if s.current() == t {
+				if s.app.GetFocus() == s.recordView {
+					s.resultPages.SwitchToPage("grid")
+					s.focusResults()
+				}
 				if err != nil {
-					s.renderGrid(query.Result{})
+					s.searchGrid(t.rowFilter)
 					s.setMessage(err.Error())
 				} else {
 					s.renderResult(result)
@@ -90,6 +97,9 @@ func (s *state) startWork(t *tab, work queryWork) {
 }
 
 func (s *state) cancelAll() {
+	if s.copyTimer != nil {
+		s.copyTimer.Stop()
+	}
 	for _, t := range s.tabs {
 		if t.cancel != nil {
 			t.cancel()

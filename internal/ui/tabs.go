@@ -17,22 +17,29 @@ type origin struct{ ID, Why, Actor string }
 // Every tab has the same shape; an origin makes it an agent tab, not a second
 // tab kind. Results stay attached to their tab even when another tab is active.
 type tab struct {
-	title     string
-	sql       string
-	origin    *origin
-	result    query.Result
-	err       error
-	cursor    gridPos
-	rowFilter string
-	cancel    context.CancelFunc
-	started   time.Time
-	runID     uint64
+	title       string
+	sql         string
+	origin      *origin
+	result      query.Result
+	err         error
+	cursor      gridPos
+	rowFilter   string
+	equalFilter *cellFilter
+	sorted      bool
+	sortColumn  int
+	sortDesc    bool
+	record      bool
+	cancel      context.CancelFunc
+	started     time.Time
+	runID       uint64
 }
 
 func (s *state) current() *tab { return s.tabs[s.active] }
 
 func (s *state) saveTab() {
-	s.current().cursor.Row, s.current().cursor.Col = s.grid.GetSelection()
+	if !s.current().record {
+		s.current().cursor.Row, s.current().cursor.Col = s.grid.GetSelection()
+	}
 	s.current().sql = s.query.GetText()
 }
 
@@ -83,17 +90,29 @@ func (s *state) showTab() {
 	s.queryPane.ResizeItem(s.why, whyHeight, 0)
 	s.searchMatches = nil
 	s.searchIndex = 0
+	cursor := t.cursor
 	s.searchGrid(t.rowFilter)
 	if len(s.searchMatches) > 0 {
 		for i, match := range s.searchMatches {
-			if match == t.cursor {
+			if match == cursor {
 				s.searchIndex = i
 				s.applySearchMatch()
 				break
 			}
 		}
 	}
-	s.grid.Select(t.cursor.Row, t.cursor.Col)
+	s.grid.Select(min(max(1, cursor.Row), max(1, len(s.viewRows))), cursor.Col)
+	s.resultPane.SetTitle(" results ")
+	if t.record {
+		s.renderRecord()
+		s.resultPages.SwitchToPage("record")
+	} else {
+		s.resultPages.SwitchToPage("grid")
+	}
+	if s.app.GetFocus() == s.grid || s.app.GetFocus() == s.recordView {
+		s.focusResults()
+	}
+	s.refreshCell()
 	if len(t.result.Columns) == 0 && t.err == nil {
 		s.grid.Clear()
 		s.grid.SetCell(0, 0, tview.NewTableCell("Open a table or run a query").SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))

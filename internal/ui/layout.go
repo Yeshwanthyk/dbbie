@@ -38,9 +38,17 @@ func (s *state) layout() tview.Primitive {
 	s.header.SetBackgroundColor(s.theme.TCell(s.theme.Background))
 	s.status.SetBackgroundColor(s.theme.TCell(s.theme.Background))
 	s.sqlView.SetWrap(true)
-	s.grid = tview.NewTable().SetBorders(false).SetSelectable(true, true).SetFixed(1, 0).
-		SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
-	s.pane(s.grid.Box, "results")
+	s.grid = tview.NewTable().SetBorders(false).SetSeparator('│').SetSelectable(true, true).SetFixed(1, 0).
+		SetEvaluateAllRows(true).SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
+	s.grid.SetBackgroundColor(s.theme.TCell(s.theme.Panel))
+	s.grid.SetSelectionChangedFunc(s.selectionChanged)
+	s.grid.SetSelectedFunc(func(_, _ int) { s.openRecord() })
+	s.cellInfo = s.text().SetWrap(true)
+	s.recordView = s.text().SetWrap(true).SetScrollable(true)
+	s.resultPages = tview.NewPages().AddPage("grid", s.grid, true, true).AddPage("record", s.recordView, true, false)
+	s.resultPane = &resultsFrame{Flex: tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(s.resultPages, 0, 1, true).AddItem(s.cellInfo, 2, 0, false), state: s}
+	s.pane(s.resultPane.Box, "results")
 	s.sidebar = tview.NewTable().SetBorders(false).SetSelectable(true, false).
 		SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
 	s.sidebar.SetBackgroundColor(s.theme.TCell(s.theme.Panel))
@@ -81,14 +89,15 @@ func (s *state) layout() tview.Primitive {
 	s.pane(s.queryPane.Box, "query")
 	s.prompts = tview.NewFlex()
 	s.modeLine = tview.NewFlex().AddItem(s.status, 0, 1, false).AddItem(s.prompts, 0, 0, false)
-	right := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(s.queryPane, 6, 0, false).AddItem(s.grid, 0, 1, true)
+	right := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(s.queryPane, 6, 0, false).AddItem(s.resultPane, 0, 1, true)
 	s.body = tview.NewFlex().AddItem(s.sidePane, 32, 0, true).AddItem(right, 0, 1, false)
 	root := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(s.header, 1, 0, false).AddItem(s.body, 0, 1, true).AddItem(s.modeLine, 1, 0, false)
 	s.pages = tview.NewPages().AddPage("main", root, true, true)
 	s.bindFocus(s.sidebar.Box, s.sidePane.Box)
 	s.bindFocus(s.tableFilter.Box, s.sidePane.Box)
-	s.bindFocus(s.grid.Box, s.grid.Box)
-	s.bindFocus(s.search.Box, s.grid.Box)
+	s.bindFocus(s.grid.Box, s.resultPane.Box)
+	s.bindFocus(s.recordView.Box, s.resultPane.Box)
+	s.bindFocus(s.search.Box, s.resultPane.Box)
 	s.bindFocus(s.query.Box, s.queryPane.Box)
 	s.bindFocus(s.sqlView.Box, s.queryPane.Box)
 	s.bindFocus(s.why.Box, s.queryPane.Box)
@@ -101,7 +110,11 @@ func (s *state) layout() tview.Primitive {
 func (s *state) focusResults() {
 	s.pendingKey = 0
 	s.queryPages.SwitchToPage("sql")
-	s.app.SetFocus(s.grid)
+	if s.current().record {
+		s.app.SetFocus(s.recordView)
+	} else {
+		s.app.SetFocus(s.grid)
+	}
 }
 
 func (s *state) focusTables() {
@@ -122,7 +135,10 @@ func (s *state) refreshMode() {
 		return
 	}
 	focus := s.app.GetFocus()
-	mode, color, hints := "NORMAL", s.theme.Success, "hjkl move · w/b column · gt/gT tab · / filter · Ctrl-h tables · ? help"
+	mode, color, hints := "NORMAL", s.theme.Success, "hjkl move · Enter record · yy/Y copy · s/S sort · f equal · / filter · ? help"
+	if s.current().record {
+		mode, color, hints = "RECORD", s.theme.Agent, "j/k prev/next row · Esc back · yy cell · Y row JSON · Ctrl-d/u scroll"
+	}
 	s.modeLine.ResizeItem(s.status, 0, 1)
 	s.modeLine.ResizeItem(s.prompts, 0, 0)
 	s.prompts.Clear()
