@@ -11,6 +11,12 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	if event == nil {
 		return nil
 	}
+	if event.Key() == tcell.KeyF24 {
+		// A private redraw wake-up expires clipboard feedback on the UI loop.
+		s.expireCopyMessage()
+		return nil
+	}
+	s.expireCopyMessage()
 	if s.quitting {
 		return nil
 	}
@@ -69,7 +75,15 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	}
 	if event.Key() == tcell.KeyEsc {
 		s.pendingKey = 0
-		s.tableFilter.SetText("")
+		if focus == s.recordView {
+			s.closeRecord()
+		} else if focus == s.grid {
+			s.current().equalFilter = nil
+			s.search.SetText("")
+			s.searchGrid("")
+		} else {
+			s.tableFilter.SetText("")
+		}
 		return nil
 	}
 	if event.Key() == tcell.KeyCtrlD && focus == s.grid {
@@ -82,6 +96,18 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	}
 	if event.Key() == tcell.KeyEnter && focus == s.sidebar {
 		s.openSelectedTable(false)
+		return nil
+	}
+	if event.Key() == tcell.KeyEnter && focus == s.grid {
+		s.openRecord()
+		return nil
+	}
+	if focus == s.recordView && (event.Key() == tcell.KeyDown || event.Key() == tcell.KeyUp) {
+		delta := 1
+		if event.Key() == tcell.KeyUp {
+			delta = -1
+		}
+		s.moveGrid(delta, 0)
 		return nil
 	}
 	if event.Key() != tcell.KeyRune {
@@ -102,6 +128,9 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	if prefix := s.pendingKey; prefix != 0 {
 		s.pendingKey = 0
 		switch {
+		case prefix == 'y' && key == 'y' && (focus == s.grid || focus == s.recordView):
+			s.yank(false)
+			return nil
 		case prefix == 'g' && key == 't':
 			s.switchTab((s.active + 1) % len(s.tabs))
 			return nil
@@ -175,6 +204,20 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 		}
 		return nil
 	}
+	if (focus == s.grid || focus == s.recordView) && s.resultKey(key) {
+		return nil
+	}
+	if focus == s.recordView {
+		switch key {
+		case 'j':
+			s.moveGrid(1, 0)
+		case 'k':
+			s.moveGrid(-1, 0)
+		default:
+			return event
+		}
+		return nil
+	}
 	if focus == s.grid {
 		switch key {
 		case 'h', 'b':
@@ -212,7 +255,7 @@ func (s *state) moveSidebar(delta int) {
 }
 
 func (s *state) moveGrid(rows, cols int) {
-	if len(s.current().result.Rows) == 0 {
+	if len(s.viewRows) == 0 || s.current().err != nil {
 		return
 	}
 	row, col := s.grid.GetSelection()

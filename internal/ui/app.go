@@ -3,7 +3,9 @@ package ui
 import (
 	"context"
 	"database/sql"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -39,7 +41,8 @@ func Run(ctx context.Context, opts Options) error {
 	// Start only after the screen initialized. A failed terminal startup must
 	// not leave a worker waiting on an event loop that never ran.
 	started := false
-	app.SetBeforeDrawFunc(func(tcell.Screen) bool {
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		s.screen = screen
 		if !started {
 			started = true
 			s.runInitialSQL(opts.InitialSQL)
@@ -104,6 +107,17 @@ type state struct {
 	quitting   bool
 
 	header, status, why, sqlView        *tview.TextView
+	cellInfo, recordView                *tview.TextView
+	resultPane                          *resultsFrame
+	resultPages                         *tview.Pages
+	viewRows                            [][]any
+	highlightedRow                      int
+	naturalWidths                       []int
+	gridViewportWidth                   int
+	screen                              tcell.Screen
+	clipboardWriter                     io.Writer
+	copiedUntil                         time.Time
+	copyTimer                           *time.Timer
 	sidebar, grid                       *tview.Table
 	query, command, search, tableFilter *tview.InputField
 	sidePane, queryPane, body, modeLine *tview.Flex

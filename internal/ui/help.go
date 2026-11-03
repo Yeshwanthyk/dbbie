@@ -62,14 +62,13 @@ func (s *state) toggleHelp() {
  / · n / N          row filter · next / previous match
  ]a / [a            next / previous agent tab
 
-[%s]NEXT SLICE (C2) — not active yet[::-]
- Enter · Esc        record view / back
+ Enter · Esc        record view / back (j/k moves rows)
  yy / Y             copy cell / row JSON (OSC52)
- s / S              sort ascending / descending
- f                  re-query where column = value
+ s / S              sort fetched rows ascending / descending
+ f · Esc            toggle equal-cell filter / clear filters
 
  :theme             theme selection requires restart
-`, s.theme.Primary, s.theme.Primary, s.theme.Primary, s.theme.Muted))
+`, s.theme.Primary, s.theme.Primary, s.theme.Primary))
 	column := tview.NewFlex().SetDirection(tview.FlexRow).AddItem(nil, 0, 1, false).AddItem(help, 38, 0, true).AddItem(nil, 0, 1, false)
 	modal := &helpFrame{Flex: tview.NewFlex().AddItem(nil, 0, 1, false).AddItem(column, 82, 0, true).AddItem(nil, 0, 1, false), column: column, help: help}
 	s.pages.AddPage("help", modal, true, true)
