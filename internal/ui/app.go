@@ -139,33 +139,41 @@ type state struct {
 	followCancel   context.CancelFunc
 	agentNotice    string
 
-	header, status, why, sqlView        *tview.TextView
-	cellInfo, recordView                *tview.TextView
-	resultPane                          *resultsFrame
-	resultPages                         *tview.Pages
-	viewRows                            [][]any
-	highlightedRow                      int
-	naturalWidths                       []int
-	gridViewportWidth                   int
-	screen                              tcell.Screen
-	clipboardWriter                     io.Writer
-	copiedUntil                         time.Time
-	copyTimer                           *time.Timer
-	sidebar, grid                       *tview.Table
-	query, command, search, tableFilter *tview.InputField
-	sidePane, queryPane, body, modeLine *tview.Flex
-	pages, queryPages                   *tview.Pages
-	prompts                             *tview.Flex
-	tables                              []catalog.Table
-	visibleTables                       []catalog.Table
-	sideWidth                           int
-	multiSchema                         bool
-	pendingKey                          rune
-	helpOpen                            bool
-	helpReturn                          tview.Primitive
-	message                             string
-	searchMatches                       []gridPos
-	searchIndex                         int
+	modeTag, modeColor, modeHints              string
+	modeWidth                                  int
+	headerWidth                                int
+	modePrompt                                 *tview.InputField
+	editOriginal                               string
+	editing                                    bool
+	recordWidth                                int
+	header, status, why, sqlView               *tview.TextView
+	modeInfo                                   *tview.TextView
+	cellInfo, recordView                       *tview.TextView
+	resultPane                                 *resultsFrame
+	resultPages                                *tview.Pages
+	viewRows                                   [][]any
+	highlightedRow                             int
+	naturalWidths                              []int
+	gridViewportWidth                          int
+	screen                                     tcell.Screen
+	clipboardWriter                            io.Writer
+	copiedUntil                                time.Time
+	copyTimer                                  *time.Timer
+	sidebar, grid                              *tview.Table
+	query, command, search, tableFilter        *tview.InputField
+	sidePane, queryPane, body, right, modeLine *tview.Flex
+	pages, queryPages                          *tview.Pages
+	prompts                                    *tview.Flex
+	tables                                     []catalog.Table
+	visibleTables                              []catalog.Table
+	sideWidth                                  int
+	multiSchema                                bool
+	pendingKey                                 rune
+	helpOpen                                   bool
+	helpReturn                                 tview.Primitive
+	message                                    string
+	searchMatches                              []gridPos
+	searchIndex                                int
 }
 
 func newState(ctx context.Context, app *tview.Application, opts Options) *state {

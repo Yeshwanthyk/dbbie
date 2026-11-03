@@ -154,7 +154,7 @@ func TestSearchGridSelectsFirstMatchingCell(t *testing.T) {
 	if state.grid.GetRowCount() != 2 {
 		t.Fatalf("row count = %d, want header + filtered row", state.grid.GetRowCount())
 	}
-	if !strings.Contains(state.status.GetText(false), "row=1 column=2") {
+	if !strings.Contains(state.status.GetText(true), "match 1/1") || !strings.Contains(state.status.GetText(true), "1/2 rows") {
 		t.Fatalf("status = %q", state.status.GetText(false))
 	}
 	_, got, _ := state.grid.GetCell(1, 1).Style.Decompose()

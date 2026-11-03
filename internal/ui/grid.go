@@ -134,9 +134,9 @@ func (s *state) searchGrid(text string) {
 	} else if len(s.searchMatches) > 0 {
 		s.applySearchMatch()
 	} else if text != "" {
-		s.setMessage(fmt.Sprintf("no match %s · 0/%d rows", text, len(t.result.Rows)))
+		s.setMessage(fmt.Sprintf("no match %s", displayValue(text)))
 	} else if t.equalFilter != nil {
-		s.setMessage(fmt.Sprintf("equal filter · %d/%d rows · f/Esc clear", len(s.viewRows), len(t.result.Rows)))
+		s.setMessage("equal filter · f/Esc clear")
 	} else {
 		s.setMessage("")
 	}
@@ -181,7 +181,7 @@ func (s *state) applySearchMatch() {
 	s.resetGridStyles()
 	active := s.searchMatches[s.searchIndex]
 	s.grid.Select(active.Row, active.Col)
-	s.setMessage(fmt.Sprintf("filter %d/%d rows · match %d/%d row=%d column=%d · %s · n/N next/prev", len(s.viewRows), len(s.current().result.Rows), s.searchIndex+1, len(s.searchMatches), active.Row, active.Col+1, s.current().rowFilter))
+	s.setMessage(fmt.Sprintf("/ %s · match %d/%d", displayValue(s.current().rowFilter), s.searchIndex+1, len(s.searchMatches)))
 }
 
 func (s *state) styleRow(row int) {
@@ -201,7 +201,7 @@ func (s *state) styleRow(row int) {
 		}
 		attr := tcell.AttrNone
 		if value == nil {
-			fg, attr = s.theme.Muted, tcell.AttrDim
+			fg = s.theme.Muted
 		} else if b, ok := boolValue(value, column); ok {
 			fg = s.theme.Danger
 			if b {
@@ -268,8 +268,11 @@ func (s *state) refreshCell() {
 	}
 	column := s.current().result.Columns[col]
 	row, _ := s.grid.GetSelection()
-	s.cellInfo.SetText(fmt.Sprintf("[%s]%s[::-] · [%s]%s[::-] · %s", s.theme.Primary, tview.Escape(displayValue(column.Name)), s.theme.Muted, tview.Escape(column.Database), tview.Escape(displayValue(fullValue(value)))))
+	s.cellInfo.SetText(fmt.Sprintf("\n[%s]%s[-:-:-] · [%s]%s[-:-:-] · %s", s.theme.Primary, tview.Escape(displayValue(column.Name)), s.theme.Muted, tview.Escape(column.Database), tview.Escape(displayValue(fullValue(value)))))
 	s.resultPane.SetTitle(fmt.Sprintf(" results · %d/%d rows · col %d/%d ", row, len(s.viewRows), col+1, len(s.current().result.Columns)))
+	if s.current().record {
+		s.resultPane.SetTitle(fmt.Sprintf(" record · %d/%d rows ", row, len(s.viewRows)))
+	}
 }
 
 func (s *state) openRecord() {
@@ -289,21 +292,39 @@ func (s *state) renderRecord() {
 		s.recordView.SetText("0 rows")
 		return
 	}
+	columns := s.current().result.Columns
+	keyWidth, typeWidth := 0, 0
+	for _, column := range columns {
+		keyWidth = max(keyWidth, tview.TaggedStringWidth(tview.Escape(displayValue(column.Name))))
+		typeWidth = max(typeWidth, tview.TaggedStringWidth(tview.Escape(displayValue(column.Database))))
+	}
+	width := s.recordWidth
+	if width == 0 {
+		width = 80
+	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "[%s::b]Record %d/%d[::-]\n\n", s.theme.Agent, row, len(s.viewRows))
-	for col, column := range s.current().result.Columns {
+	for col, column := range columns {
 		value := rowValue(s.viewRows[row-1], col)
 		fg := s.theme.Text
 		if value == nil {
 			fg = s.theme.Muted
 		}
-		fmt.Fprintf(&out, "[%s::b]%s[::-] [%s]%s[::-]\n[%s]%s[::-]\n\n", s.theme.Primary, tview.Escape(displayValue(column.Name)), s.theme.Muted, tview.Escape(column.Database), fg, tview.Escape(displayValue(fullValue(value))))
+		key, typ, text := displayValue(column.Name), displayValue(column.Database), displayValue(fullValue(value))
+		if keyWidth+typeWidth+4+tview.TaggedStringWidth(tview.Escape(text)) <= width {
+			key = strings.Repeat(" ", keyWidth-tview.TaggedStringWidth(tview.Escape(key))) + key
+			typ += strings.Repeat(" ", typeWidth-tview.TaggedStringWidth(tview.Escape(typ)))
+			fmt.Fprintf(&out, "[%s]%s[-:-:-]  [%s]%s[-:-:-]  [%s]%s[-:-:-]\n", s.theme.Primary, tview.Escape(key), s.theme.Muted, tview.Escape(typ), fg, tview.Escape(text))
+		} else {
+			fmt.Fprintf(&out, "[%s]%s[-:-:-]  [%s]%s[-:-:-]\n[%s]%s[-:-:-]\n\n", s.theme.Primary, tview.Escape(key), s.theme.Muted, tview.Escape(typ), fg, tview.Escape(text))
+		}
 	}
+	s.resultPane.SetTitle(fmt.Sprintf(" record · %d/%d rows ", row, len(s.viewRows)))
 	s.recordView.SetText(out.String()).ScrollToBeginning()
 }
 
 func (s *state) closeRecord() {
 	s.current().record = false
 	s.resultPages.SwitchToPage("grid")
+	s.refreshCell()
 	s.focusResults()
 }

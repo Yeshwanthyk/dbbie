@@ -41,15 +41,16 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	}
 	focus := s.app.GetFocus()
 	if focus == s.query || focus == s.command || focus == s.search || focus == s.tableFilter {
+		if focus == s.query && event.Key() == tcell.KeyCtrlU {
+			s.query.SetText("")
+			return nil
+		}
 		if event.Key() == tcell.KeyEsc || event.Key() == tcell.KeyEnter {
 			// Dispatch completion here as well as on the widgets so capture-only
 			// tests exercise the same transition as the live event loop.
 			switch focus {
 			case s.query:
-				if event.Key() == tcell.KeyEnter {
-					s.runQuery(s.query.GetText())
-				}
-				s.focusResults()
+				s.finishQueryEdit(event.Key() == tcell.KeyEnter)
 			case s.command:
 				if event.Key() == tcell.KeyEnter {
 					s.runCommand(s.command.GetText())

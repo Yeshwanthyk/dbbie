@@ -103,7 +103,7 @@ func (s *state) startWork(t *tab, work queryWork) {
 					s.setMessage(err.Error())
 				} else {
 					s.renderResult(result)
-					s.setMessage(fmt.Sprintf("rows=%d truncated=%t elapsed=%s", result.RowCount, result.Truncated, time.Since(t.started).Round(time.Millisecond)))
+					s.setMessage("")
 				}
 			}
 		}
