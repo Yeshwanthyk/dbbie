@@ -10,6 +10,13 @@ tmux send-keys, so names like Enter, Escape, C-h and Tab work. Use "lit:TEXT"
 to type TEXT literally, and "sleep:0.5" to wait. The first step may be a bare
 label (no keys), which captures the startup screen.
 
+--driver rex (the default when `rex` is on PATH) runs the program in a hidden
+Rex session sized with the block's `size` option, sends keys with
+`rex send-key` (Rex key syntax: enter, escape, ctrl+h, j) and text with
+`rex send`, and captures with `rex capture --format=html`. --driver tmux keeps
+the tmux path (tmux key names: Enter, Escape, C-h). --png also writes a PNG
+of index.html through headless Chrome.
+
 Each step writes <out>/<NN>-<label>.html (a <pre> with the pane's real colors)
 and <out>/index.html, which stacks every capture on one page.
 """
@@ -123,10 +130,76 @@ def ansi_to_html(text, fg0="#F0F6FC", bg0="#0D1117"):
 
 def page(title, body, bg="#0D1117"):
     return ("<!doctype html><meta charset=utf-8><title>%s</title>"
-            "<style>body{margin:0;background:%s}pre{margin:0;padding:8px;background:%s;"
+            "<style>body{margin:0;padding:12px;background:%s}pre{margin:0;padding:8px;background:%s;"
             "font:12px/1.25 'JetBrains Mono','SF Mono',Menlo,monospace;color:#F0F6FC;white-space:pre}"
             "h3{font:600 12px system-ui;color:#8B949E;margin:14px 8px 4px}</style>%s"
             % (html.escape(title), bg, bg, body))
+
+
+def rex(*args, inp=None):
+    return subprocess.run(["rex", *args], check=True, capture_output=True, text=True, input=inp).stdout
+
+
+REX_START = """
+local a = rex.args
+local s = rex.call("session.create", { label = a.label, initial_windows = { { window_label = a.label,
+  layout = { block = { flavor = "com.superlogical.terminal.shell",
+    options = { command = { "sh", "-c", a.cmd }, shell = "none", size = { columns = a.cols, rows = a.rows } } } } } } })
+return { session_id = s.session_id, block_id = s.initial_windows[1].block_ids[1] }
+"""
+
+
+class RexPane:
+    def __init__(self, label, cmd, cols, rows):
+        import json
+        args = json.dumps({"label": label, "cmd": cmd, "cols": cols, "rows": rows})
+        out = json.loads(rex("do", "-", "--json", "--args", args, inp=REX_START))
+        self.sid, self.bid = out["session_id"], out["block_id"]
+
+    def key(self, k):
+        rex("send-key", "-s", self.sid, "-b", self.bid, k)
+
+    def text(self, t):
+        rex("send", "-s", self.sid, "-b", self.bid, t)
+
+    def capture(self):
+        raw = rex("capture", "-s", self.sid, "-b", self.bid, "--format=html")
+        # Rex emits <div style="display: inline;..."> runs; keep its colours.
+        return raw.replace('font-family: monospace; white-space: pre;', '')
+
+    def close(self):
+        subprocess.run(["rex", "kill", self.sid], capture_output=True)
+
+
+class TmuxPane:
+    def __init__(self, label, cmd, cols, rows):
+        self.s = label
+        subprocess.run(["tmux", "kill-session", "-t", label], capture_output=True)
+        tmux("new-session", "-d", "-s", label, "-x", str(cols), "-y", str(rows),
+             "TERM=xterm-256color COLORTERM=truecolor " + cmd)
+
+    def key(self, k):
+        tmux("send-keys", "-t", self.s, k)
+
+    def text(self, t):
+        tmux("send-keys", "-t", self.s, "-l", t)
+
+    def capture(self):
+        return ansi_to_html(tmux("capture-pane", "-p", "-e", "-t", self.s).rstrip("\n"))
+
+    def close(self):
+        subprocess.run(["tmux", "kill-session", "-t", self.s], capture_output=True)
+
+
+def chrome_png(html_path, png_path, width, height):
+    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if not os.path.exists(chrome):
+        print("no Chrome; skipped PNG")
+        return
+    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars",
+                    "--force-device-scale-factor=2", "--window-size=%d,%d" % (width, height),
+                    "--screenshot=" + png_path, "file://" + html_path], capture_output=True)
+    print(png_path)
 
 
 def tmux(*args):
@@ -134,19 +207,20 @@ def tmux(*args):
 
 
 def main():
+    import shutil
     ap = argparse.ArgumentParser()
     ap.add_argument("--cmd", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--session", default="dbbie-snap")
+    ap.add_argument("--driver", choices=["rex", "tmux"], default="rex" if shutil.which("rex") else "tmux")
     ap.add_argument("--cols", type=int, default=160)
     ap.add_argument("--rows", type=int, default=42)
     ap.add_argument("--settle", type=float, default=0.8)
+    ap.add_argument("--png", action="store_true")
     ap.add_argument("--step", action="append", default=[])
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    subprocess.run(["tmux", "kill-session", "-t", a.session], capture_output=True)
-    env_cmd = "TERM=xterm-256color COLORTERM=truecolor " + a.cmd
-    tmux("new-session", "-d", "-s", a.session, "-x", str(a.cols), "-y", str(a.rows), env_cmd)
+    pane = (RexPane if a.driver == "rex" else TmuxPane)(a.session, a.cmd, a.cols, a.rows)
     time.sleep(1.5)
     sections = []
     try:
@@ -154,25 +228,27 @@ def main():
             keys, _, label = step.rpartition("=") if "=" in step else ("", "", step)
             for key in [k for k in keys.split("|") if k]:
                 if key.startswith("lit:"):
-                    tmux("send-keys", "-t", a.session, "-l", key[4:])
+                    pane.text(key[4:])
                 elif key.startswith("sleep:"):
                     time.sleep(float(key[6:]))
                 else:
-                    tmux("send-keys", "-t", a.session, key)
+                    pane.key(key)
                 time.sleep(0.12)
             time.sleep(a.settle)
-            raw = tmux("capture-pane", "-p", "-e", "-t", a.session)
-            body = "<pre>%s</pre>" % ansi_to_html(raw.rstrip("\n"))
+            body = "<pre>%s</pre>" % pane.capture()
             slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "step"
             with open(os.path.join(a.out, "%02d-%s.html" % (n, slug)), "w") as f:
                 f.write(page(label, body))
             sections.append("<h3>%02d · %s</h3>%s" % (n, html.escape(label), body))
             print("captured %02d %s" % (n, label))
     finally:
-        subprocess.run(["tmux", "kill-session", "-t", a.session], capture_output=True)
-    with open(os.path.join(a.out, "index.html"), "w") as f:
+        pane.close()
+    index = os.path.abspath(os.path.join(a.out, "index.html"))
+    with open(index, "w") as f:
         f.write(page("dbbie snaps", "".join(sections)))
-    print(os.path.join(a.out, "index.html"))
+    print(index)
+    if a.png:
+        chrome_png(index, index[:-5] + ".png", int(a.cols * 7.3) + 50, len(sections) * (a.rows * 15 + 60) + 30)
 
 
 if __name__ == "__main__":
