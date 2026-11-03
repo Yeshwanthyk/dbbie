@@ -168,10 +168,7 @@ func (s *state) fitColumns(width int) {
 		}
 		name := truncateCells(header, max(1, widths[col]-len([]rune(marker)))) + marker
 		header = tview.Escape(name)
-		typ := displayValue(column.Database)
-		if typ != "" && tview.TaggedStringWidth(tview.Escape(name+" "+typ)) <= widths[col] {
-			header += " [" + s.theme.Muted + "::BU]" + tview.Escape(typ) + "[-:-:bu]"
-		}
+		// Types live in the footer inspector; showing them only where they happen to fit made headers uneven.
 		header += strings.Repeat(" ", max(0, widths[col]-tview.TaggedStringWidth(header)))
 		s.grid.GetCell(0, col).SetText(header).SetMaxWidth(widths[col])
 		for row, values := range s.viewRows {
