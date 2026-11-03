@@ -3,12 +3,23 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/yeshwanthyk/dbbie/internal/qlog"
 	"github.com/yeshwanthyk/dbbie/internal/query"
+	"github.com/yeshwanthyk/dbbie/internal/session"
 )
 
 type queryWork func(context.Context) (query.Result, error)
+
+type safeQueryError struct {
+	message string
+	cause   error
+}
+
+func (e safeQueryError) Error() string { return e.message }
+func (e safeQueryError) Unwrap() error { return e.cause }
 
 // Tests replace this hook with an inline runner; live workers queue every UI
 // mutation (including progress) through Application.QueueUpdateDraw.
@@ -37,24 +48,81 @@ func (s *state) backgroundRunner(ctx context.Context, work queryWork, progress f
 }
 
 func (s *state) runQuery(sqlText string) {
-	if s.current().origin != nil {
+	if s.current().origin != nil || s.current().sessionName != "" {
 		s.newTab("query", sqlText, nil)
 	}
+	s.runTabQuery(sqlText, false)
+}
+
+func (s *state) rerunTab() {
 	t := s.current()
-	t.sql = sqlText
-	s.query.SetText(sqlText)
+	if t.sessionName == "" && t.origin != nil && t.origin.Session != "" {
+		if t.logConn != "" && t.logConn != s.connection {
+			s.setMessage("session uses " + t.logConn + "; :conn to switch before r")
+			return
+		}
+		if trail, err := session.Open(t.origin.Session); err == nil {
+			for _, item := range trail.Items {
+				if item.LogID == t.logID {
+					t.sessionName, t.itemN, t.sessionConn, t.why = trail.Name, item.N, trail.Conn, item.Why
+					break
+				}
+			}
+		}
+	}
+	if t.sessionName != "" && t.sessionConn != s.connection {
+		s.setMessage("session uses " + t.sessionConn + "; :conn to switch before r")
+		return
+	}
+	s.runTabQuery(t.sql, true)
+}
+
+func (s *state) runTabQuery(sqlText string, forceLog bool) {
+	if s.connecting || s.awaitingConnection {
+		s.setMessage("choose a connection first with :conn")
+		return
+	}
+	if forceLog && s.log == nil {
+		l, err := qlog.Open(s.connection)
+		if err != nil {
+			s.setMessage("could not open query log")
+			return
+		}
+		s.log = l
+	}
+	t := s.current()
+	clean, redactErr := s.redactStrings(sqlText, t.title, t.why)
+	if redactErr != nil {
+		s.setMessage("could not safely redact query text")
+		return
+	}
+	t.sql, t.title, t.why = clean[0], clean[1], clean[2]
+	s.query.SetText(t.sql)
 	t.rowFilter = ""
 	t.equalFilter, t.sorted, t.record = nil, false, false
 	s.resultPages.SwitchToPage("grid")
 	s.refreshHeader()
 	// Capture only immutable inputs; a worker must never read mutable UI state.
 	conn, limit, log, noLog := s.db, s.limit, s.log, s.noLog
-	kind, title := s.kind, t.title
+	kind, title, why, sessionName := s.kind, t.title, t.why, t.sessionName
+	redact := s.redactStrings
+	if t.origin != nil && sessionName == "" {
+		sessionName = t.origin.Session
+	}
 	s.startWork(t, func(ctx context.Context) (query.Result, error) {
 		start := time.Now()
 		result, err := (query.Runner{DB: conn}).Run(ctx, query.Options{SQL: sqlText, Limit: limit, Timeout: 15 * time.Second, ReadOnly: true})
-		if log != nil && !noLog {
-			entry, logErr := log.Append(humanEntry(kind, title, sqlText, result, err, time.Since(start)))
+		e := humanEntry(kind, title, sqlText, result, err, time.Since(start))
+		e.Why, e.Session = why, sessionName
+		if redactErr := sanitizeLogEntry(&e, redact); redactErr != nil {
+			return query.Result{}, fmt.Errorf("query completed but could not safely redact its result")
+		}
+		result.Columns, result.Rows = e.Columns, e.Rows
+		if err != nil {
+			err = safeQueryError{message: e.Error.Message, cause: err}
+		}
+		if log != nil && (!noLog || forceLog || sessionName != "") {
+			entry, logErr := log.Append(e)
 			if logErr != nil {
 				if err != nil {
 					return result, fmt.Errorf("%w; query log write failed: %v", err, logErr)
@@ -76,6 +144,7 @@ func (s *state) startWork(t *tab, work queryWork) {
 	t.started = time.Now()
 	t.runID++
 	generation := t.runID
+	connection := s.connection
 	s.pending++
 	s.refreshMode()
 	s.runner(ctx, work, func() {
@@ -85,10 +154,25 @@ func (s *state) startWork(t *tab, work queryWork) {
 	}, func(result query.Result, err error) {
 		cancel()
 		s.pending--
-		if result.ID != "" {
+		if result.ID != "" && connection == s.connection {
 			s.seen[result.ID] = true
 		}
 		if t.runID == generation {
+			t.notice = ""
+			t.logID, t.logConn = "", ""
+			if strings.HasPrefix(result.ID, "q_") {
+				t.logID, t.logConn = result.ID, connection
+				if t.origin != nil && s.log != nil && connection == s.connection {
+					if entry, getErr := s.log.Get(result.ID); getErr == nil {
+						t.origin = &entry
+					}
+				}
+				if t.sessionName != "" {
+					if updateErr := session.SetLogID(t.sessionName, t.itemN, result.ID); updateErr != nil {
+						err = fmt.Errorf("session result update failed: %w", updateErr)
+					}
+				}
+			}
 			t.cancel = nil
 			t.result, t.err = result, err
 			t.record = false
@@ -105,6 +189,9 @@ func (s *state) startWork(t *tab, work queryWork) {
 					s.renderResult(result)
 					s.setMessage("")
 				}
+				if t.origin != nil || t.sessionName != "" {
+					s.showTab()
+				}
 			}
 		}
 		// Drain canceled workers before stopping the event loop. Otherwise
@@ -115,6 +202,9 @@ func (s *state) startWork(t *tab, work queryWork) {
 }
 
 func (s *state) cancelAll() {
+	if s.connectCancel != nil {
+		s.connectCancel()
+	}
 	if s.followCancel != nil {
 		s.followCancel()
 	}
@@ -135,6 +225,11 @@ func (s *state) quit() {
 }
 
 func (s *state) cancelOrQuit() {
+	if s.connectCancel != nil {
+		s.connectCancel()
+		s.setMessage("canceling connection…")
+		return
+	}
 	if cancel := s.current().cancel; cancel != nil {
 		cancel()
 		s.setMessage("canceling…")

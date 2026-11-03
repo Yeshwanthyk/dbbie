@@ -23,7 +23,7 @@ func (f *shellFrame) Draw(screen tcell.Screen) {
 	queryWidth := max(1, width-side-5)
 	sqlHeight := min(3, wrappedLines(s.current().sql, queryWidth))
 	whyHeight := 0
-	if s.current().origin != nil {
+	if s.why.GetText(true) != "" {
 		whyHeight = min(2, wrappedLines(s.why.GetText(true), queryWidth))
 	}
 	s.queryPane.ResizeItem(s.why, whyHeight, 0)

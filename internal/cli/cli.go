@@ -90,13 +90,16 @@ Usage:
   dbbie session run <name> [--only N] [--limit 100] [--timeout 10s] [--json]
   dbbie log --conn <name> [--limit 20] [--json]
   dbbie show <id> --conn <name> [--offset 0] [--limit 100] [--json]
-  dbbie open (--conn <name> | --driver <postgres|mysql> --dsn <dsn> [--save <name>]) [--sql <sql>] [--follow] [--recent 5] [--no-log]
+  dbbie open [--conn <name> | --driver <postgres|mysql> --dsn <dsn> [--save <name>]] [--session <name> | --sql <sql>] [--follow] [--recent 5] [--no-log]
   dbbie tools [--json]
   dbbie serve-mcp (not implemented)
 
 JSON is the default when stdout is not a terminal; --json=false prints human-readable output.
 DBBIE_SESSION selects query's default session; --session overrides it. Sessions require a saved connection
-and query logging. session run is always read-only and logged, including rejected/failed runs.`)
+and query logging. session run is always read-only and logged, including rejected/failed runs.
+open --session uses the session connection and stored results; it never re-runs SQL on open.
+open without credentials picks a saved connection (one opens directly; none requires --conn/--dsn).
+In the TUI: r re-runs read-only and logged; :save <name> [title], :add, :sessions, :conn.`)
 }
 
 func newFlags(name string) *flag.FlagSet {

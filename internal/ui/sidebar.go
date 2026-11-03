@@ -140,7 +140,7 @@ func (s *state) openSelectedTable(newTab bool) {
 	if !ok {
 		return
 	}
-	if newTab || s.current().origin != nil {
+	if newTab || s.current().origin != nil || s.current().sessionName != "" {
 		s.newTab(table.Name, "", nil)
 	}
 	s.current().title = table.Name

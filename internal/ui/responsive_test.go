@@ -233,7 +233,7 @@ func TestHelpObscuresShellAndUsesTwoColumns(t *testing.T) {
 	}
 	frame := s.pages.GetPage("help").(*helpFrame)
 	_, _, width, height := frame.help.GetRect()
-	if width != 100 || height != 23 {
+	if width != 100 || height != 25 {
 		t.Fatalf("help card=%dx%d", width, height)
 	}
 	if tview.TaggedStringWidth(frame.help.GetText(false)) == 0 {

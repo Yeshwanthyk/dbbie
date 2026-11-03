@@ -53,20 +53,26 @@ func (s *state) appendEntry(e qlog.Entry) bool {
 	if title == "" {
 		title = e.ID
 	}
-	t := &tab{title: title, sql: e.SQL, origin: &e, cursor: gridPos{Row: 1}, result: query.Result{
+	t := storedTab(e)
+	t.title = title
+	s.tabs = append(s.tabs, t)
+	return true
+}
+
+func storedTab(e qlog.Entry) *tab {
+	t := &tab{title: e.Title, sql: e.SQL, origin: &e, why: e.Why, logID: e.ID, logConn: e.Conn, cursor: gridPos{Row: 1}, result: query.Result{
 		ID: e.ID, Columns: e.Columns, Rows: e.Rows, RowCount: e.RowCount,
 		Truncated: e.Truncated, Elapsed: (time.Duration(e.ElapsedMs) * time.Millisecond).String(),
 	}}
 	if e.Error != nil {
 		t.err = errors.New(e.Error.Message)
 	}
-	s.tabs = append(s.tabs, t)
-	return true
+	return t
 }
 
 func (s *state) typing() bool {
 	focus := s.app.GetFocus()
-	return focus == s.query || focus == s.command || focus == s.search || focus == s.tableFilter
+	return s.picker != nil || focus == s.query || focus == s.command || focus == s.search || focus == s.tableFilter
 }
 
 func (s *state) receiveEntry(e qlog.Entry) {
@@ -107,6 +113,9 @@ func (s *state) startFollow() {
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.followCancel = cancel
 	s.following = true
+	s.followWorkers++
+	s.followGeneration++
+	generation := s.followGeneration
 	follow := s.follow
 	if follow == nil {
 		l, app := s.log, s.app
@@ -121,10 +130,17 @@ func (s *state) startFollow() {
 			}()
 		}
 	}
-	follow(ctx, s.logOffset, s.receiveEntry, func(err error) {
+	follow(ctx, s.logOffset, func(e qlog.Entry) {
+		if generation == s.followGeneration {
+			s.receiveEntry(e)
+		}
+	}, func(err error) {
 		cancel()
-		s.following = false
-		if err != nil && !errors.Is(err, context.Canceled) && !s.quitting {
+		s.followWorkers--
+		if generation == s.followGeneration {
+			s.following = false
+		}
+		if generation == s.followGeneration && err != nil && !errors.Is(err, context.Canceled) && !s.quitting {
 			s.setMessage("query log follow stopped: " + err.Error())
 		}
 		s.stopWhenDrained()
@@ -132,7 +148,7 @@ func (s *state) startFollow() {
 }
 
 func (s *state) stopWhenDrained() {
-	if s.quitting && s.pending == 0 && !s.following && !s.startupPending {
+	if s.quitting && s.pending == 0 && s.followWorkers == 0 && !s.startupPending {
 		s.app.Stop()
 	}
 }

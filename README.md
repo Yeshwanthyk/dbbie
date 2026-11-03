@@ -19,6 +19,8 @@ dbbie log --conn prod --limit 20 --json
 dbbie show q_0001 --conn prod --offset 0 --limit 25 --json
 dbbie open --conn prod
 dbbie open --conn prod --sql "select * from users"
+dbbie open                              # saved-connection picker
+dbbie open --session refund-bug          # stored results, never re-runs SQL
 dbbie tools --json
 ```
 
@@ -106,6 +108,41 @@ resolution as query logs. Files are `0600`, directories `0700`. Atomic replaceme
 under a stable per-session lock protects concurrent CLI processes. The extra
 `nextN` field preserves the item-number high-water mark after deletion. Sessions
 contain no DSNs; SQL and intent can still contain sensitive business information.
+
+## Sessions in the TUI
+
+`dbbie open --session NAME` restores one tab per item, in order, from its latest
+stored query-log entry. **Opening never re-runs the session's SQL.** It selects
+the session's saved connection, even if `--conn` names another connection. Tab
+titles are the item title or stable `#N`; the intent line shows
+`session NAME · #N · why`. A missing stored entry shows `no stored result · r to run`.
+An empty session opens a blank SQL tab ready for `:add`.
+
+- `r` re-runs the current tab **in place**, read-only, bounded, timeout-bound, and
+  logged (even with `--no-log` or `DBBIE_NO_LOG=1`). Session reruns tag the new log
+  entry and update that item's `logId`, including failed/rejected runs.
+- `:save NAME [title]` saves all open tabs' SQL, intent and latest stored log ids
+  as a new session on the current saved connection, and makes it active. Invalid
+  or existing names show an error. Tabs from another connection must be closed
+  before saving; unrun SQL (including a blank draft) is saved without a result handle.
+- `:add` appends the current SQL tab to the active session and binds it to the new
+  item. Editing a session or agent tab with `i` creates a new draft tab, preserving
+  the original; `:add` pins that draft when ready.
+- `:sessions` opens a fuzzy picker with name, title, item count and updated time.
+  Type to filter, use arrows (or Ctrl-j/Ctrl-k) to select, Enter to open its stored
+  tabs, and Esc to cancel. Opening another session replaces the current tabs.
+- `:conn` opens a fuzzy saved-connection picker showing **names and drivers only**.
+  Switching reloads the catalog and updates the header while keeping all tabs.
+  A session tab on a different connection asks you to switch back before `r`;
+  this prevents reruns or additions on the wrong database. Finish or cancel a
+  running query before switching connections/sessions.
+
+`dbbie open` without `--conn`/`--driver`/`--dsn` opens the saved-connection picker;
+with exactly one saved connection it opens directly, and with none it requires
+explicit credentials. Esc at the startup picker exits. `--session` cannot be
+combined with `--sql` or `--save`; `--follow` still tails new entries, but does not
+restore unrelated recent entries on top of the session's tabs. Followed ◆ agent
+tabs show the entry's session name when present. `?` shows the key/command help.
 
 ## Saved-connection management
 

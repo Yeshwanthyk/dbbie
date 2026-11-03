@@ -137,7 +137,7 @@ func (s *state) focusTables() {
 }
 
 func (s *state) focusQuery() {
-	if s.current().origin != nil {
+	if s.current().origin != nil || s.current().sessionName != "" {
 		s.newTab("query", s.current().sql, nil)
 	}
 	s.editOriginal, s.editing = s.query.GetText(), true
