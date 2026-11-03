@@ -175,8 +175,8 @@ func TestSearchGridReportsNoMatch(t *testing.T) {
 	if !strings.Contains(state.status.GetText(false), "no match") || !strings.Contains(state.status.GetText(false), "missing") {
 		t.Fatalf("status = %q", state.status.GetText(false))
 	}
-	if state.grid.GetRowCount() != 1 {
-		t.Fatalf("row count = %d, want header only", state.grid.GetRowCount())
+	if state.grid.GetRowCount() != 2 || state.grid.GetCell(1, 0).Text != "0 rows" {
+		t.Fatalf("row count = %d, want header + 0 rows message", state.grid.GetRowCount())
 	}
 }
 
@@ -210,8 +210,12 @@ func newTestState(t *testing.T, conn *sql.DB) *state {
 		Theme: resolved,
 		Limit: query.DefaultPreviewLimit,
 	})
-	s.tree = tview.NewTreeView().SetRoot(tview.NewTreeNode("dbbie"))
+	s.runner = func(ctx context.Context, work queryWork, _ func(), done func(query.Result, error)) {
+		result, err := work(ctx)
+		done(result, err)
+	}
 	_ = s.layout()
+	s.focusResults()
 	return s
 }
 
