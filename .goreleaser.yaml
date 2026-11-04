@@ -53,7 +53,7 @@ homebrew_casks:
   - name: dbbie
     repository:
       owner: Yeshwanthyk
-      name: homebrew-tap
+      name: homebrew-tools
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/Yeshwanthyk/dbbie
     description: Terminal cockpit for Postgres and MySQL, built for humans and agents

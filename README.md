@@ -7,7 +7,7 @@
 macOS and Linux (amd64, arm64):
 
 ```sh
-brew install yeshwanthyk/tap/dbbie
+brew install yeshwanthyk/tools/dbbie
 # or
 curl -fsSL https://raw.githubusercontent.com/Yeshwanthyk/dbbie/main/install.sh | sh
 ```
@@ -28,7 +28,7 @@ goreleaser release --snapshot --clean   # local dry run into dist/
 ```
 
 The workflow needs the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token with
-Contents read/write on `Yeshwanthyk/homebrew-tap`.
+Contents read/write on `Yeshwanthyk/homebrew-tools`.
 
 ## Current Commands
 
