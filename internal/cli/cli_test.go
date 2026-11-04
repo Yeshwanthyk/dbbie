@@ -206,3 +206,18 @@ func TestResolveDBSpecRejectsConnMixedWithRawDSN(t *testing.T) {
 		t.Fatal("expected --conn conflict error")
 	}
 }
+
+func TestVersion(t *testing.T) {
+	old := version
+	t.Cleanup(func() { version = old })
+	version = "v1.2.3"
+	for _, arg := range []string{"version", "--version", "-v"} {
+		var stdout bytes.Buffer
+		if err := Run(context.Background(), []string{arg}, &stdout, &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(stdout.String(), "dbbie v1.2.3") {
+			t.Fatalf("%s printed %q", arg, stdout.String())
+		}
+	}
+}

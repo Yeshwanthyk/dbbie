@@ -2,6 +2,34 @@
 
 `dbbie` is a Go terminal database cockpit for Postgres and MySQL. It is designed for humans and AI agents: the same core can browse catalog metadata, run bounded read-only queries, open result handles, and render a terminal UI.
 
+## Install
+
+macOS and Linux (amd64, arm64):
+
+```sh
+brew install yeshwanthyk/tools/dbbie
+# or
+curl -fsSL https://raw.githubusercontent.com/Yeshwanthyk/dbbie/main/install.sh | sh
+```
+
+The script installs to `~/.local/bin` (set `DBBIE_INSTALL_DIR` to change it,
+`DBBIE_VERSION=v0.1.0` to pin a release) and checks the archive's SHA-256.
+Archives for each platform are on the [releases page](https://github.com/Yeshwanthyk/dbbie/releases).
+Windows is not supported yet. `dbbie version` prints what you have.
+
+## Releasing
+
+Push a tag; the release workflow runs the tests, builds with GoReleaser,
+publishes the GitHub Release, and updates the Homebrew tap:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+goreleaser release --snapshot --clean   # local dry run into dist/
+```
+
+The workflow needs the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token with
+Contents read/write on `Yeshwanthyk/homebrew-tools`.
+
 ## Current Commands
 
 ```sh
