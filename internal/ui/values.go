@@ -94,10 +94,16 @@ func timestamp(value any, column query.Column) (time.Time, bool) {
 	if tm, ok := value.(time.Time); ok {
 		return tm, true
 	}
-	text := fullValue(value)
+	text, ok := value.(string)
+	if !ok {
+		text = fullValue(value)
+	}
 	// Normalized query results use RFC3339, including for driver time.Time.
-	if tm, err := time.Parse(time.RFC3339Nano, text); err == nil {
-		return tm, true
+	// Its fixed "YYYY-MM-DDT" prefix rejects other text without parsing.
+	if len(text) >= 20 && text[4] == '-' && text[10] == 'T' {
+		if tm, err := time.Parse(time.RFC3339Nano, text); err == nil {
+			return tm, true
+		}
 	}
 	if strings.Contains(strings.ToUpper(column.Database), "TIME") {
 		for _, layout := range []string{"2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999-07", "2006-01-02 15:04:05.999999999"} {
@@ -143,11 +149,29 @@ func boolValue(value any, column query.Column) (bool, bool) {
 	return false, false
 }
 
+// cellWidth is the screen width of plain (untagged) text.
+func cellWidth(text string) int {
+	for i := 0; i < len(text); i++ {
+		if c := text[i]; c < 0x20 || c >= 0x7f {
+			return uniseg.StringWidth(text)
+		}
+	}
+	return len(text)
+}
+
+// escapeTags escapes text for tview, skipping the regexp when there is no tag.
+func escapeTags(text string) string {
+	if !strings.Contains(text, "[") {
+		return text
+	}
+	return tview.Escape(text)
+}
+
 func truncateCells(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	if tview.TaggedStringWidth(tview.Escape(text)) <= width {
+	if cellWidth(text) <= width {
 		return text
 	}
 	var out strings.Builder
@@ -178,9 +202,9 @@ func gridValue(value any, column query.Column, width int) string {
 func columnWidths(result query.Result) []int {
 	widths := make([]int, len(result.Columns))
 	for col, column := range result.Columns {
-		width := max(4, tview.TaggedStringWidth(tview.Escape(displayValue(column.Name))))
+		width := max(4, cellWidth(displayValue(column.Name)))
 		for _, row := range result.Rows[:min(widthSampleRows, len(result.Rows))] {
-			width = max(width, tview.TaggedStringWidth(tview.Escape(compactValue(rowValue(row, col), column))))
+			width = max(width, cellWidth(compactValue(rowValue(row, col), column)))
 		}
 		widths[col] = min(maxColumnWidth, width)
 	}

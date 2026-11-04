@@ -362,3 +362,43 @@ func TestTabsRetainSortEqualFilterAndRecord(t *testing.T) {
 		t.Fatal("visible-row inspector mapping lost")
 	}
 }
+
+// The grid measures only visible rows, so the padded header must keep column
+// edges fixed when the rows on screen are all shorter than the sampled ones.
+func TestColumnWidthsStableWhileScrolling(t *testing.T) {
+	s := newTestState(t, nil)
+	rows := make([][]any, 200)
+	for i := range rows {
+		rows[i] = []any{"x", "y", i}
+	}
+	rows[0] = []any{strings.Repeat("a", 20), strings.Repeat("b", 12), 0}
+	s.renderResult(query.Result{Columns: []query.Column{{Name: "a"}, {Name: "b"}, {Name: "n", Database: "INT"}}, Rows: rows})
+	s.focusResults()
+	separators := func() []int {
+		_, lines := drawAt(t, s, 120, 30)
+		_, y, _, _ := s.grid.GetInnerRect()
+		var at []int
+		for x, r := range []rune(lines[y]) {
+			if r == '│' {
+				at = append(at, x)
+			}
+		}
+		return at
+	}
+	top := separators()
+	typeKeys(s, "G")
+	if row, _ := s.grid.GetSelection(); row != 200 {
+		t.Fatalf("G row=%d", row)
+	}
+	if bottom := separators(); !reflect.DeepEqual(top, bottom) || len(top) < 2 {
+		t.Fatalf("column edges moved while scrolling: %v -> %v", top, bottom)
+	}
+}
+
+func TestCellWidthMatchesTView(t *testing.T) {
+	for _, text := range []string{"", "plain", "[red]tag", "帳戶名字", "éab", `x\u001b[31m\ty`, "∅", "2026-10-05 16:48:31", "a▲"} {
+		if got, want := cellWidth(text), tview.TaggedStringWidth(tview.Escape(text)); got != want {
+			t.Fatalf("cellWidth(%q)=%d want %d", text, got, want)
+		}
+	}
+}

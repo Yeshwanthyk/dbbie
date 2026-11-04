@@ -90,17 +90,18 @@ func (f *resultsFrame) Draw(screen tcell.Screen) {
 // width restores truncated small columns before longer values. Nothing is
 // sized from an already-truncated cell, so enlarging the terminal is lossless.
 func (s *state) fitColumns(width int) {
-	if width == s.gridViewportWidth || len(s.naturalWidths) == 0 {
+	g := s.gridView
+	if width == g.viewport || len(g.natural) == 0 {
 		return
 	}
-	s.gridViewportWidth = width
+	g.viewport = width
 	columns := s.current().result.Columns
-	widths := append([]int(nil), s.naturalWidths...)
+	widths := append([]int(nil), g.natural...)
 	minimum := make([]int, len(widths))
 	wanted := make([]int, len(widths))
 	total := max(0, len(widths)-1)
 	for col, column := range columns {
-		nameWidth := tview.TaggedStringWidth(tview.Escape(displayValue(column.Name)))
+		nameWidth := cellWidth(displayValue(column.Name))
 		if s.current().sorted && s.current().sortColumn == col {
 			nameWidth += 2
 		}
@@ -115,7 +116,7 @@ func (s *state) fitColumns(width int) {
 		}
 		wanted[col] = max(widths[col], nameWidth)
 		for _, row := range s.viewRows[:min(widthSampleRows, len(s.viewRows))] {
-			wanted[col] = max(wanted[col], tview.TaggedStringWidth(tview.Escape(compactValue(rowValue(row, col), column))))
+			wanted[col] = max(wanted[col], cellWidth(compactValue(rowValue(row, col), column)))
 		}
 		total += widths[col]
 	}
@@ -157,24 +158,7 @@ func (s *state) fitColumns(width int) {
 		widths[col] += extra
 		total += extra
 	}
-	for col, column := range columns {
-		header := displayValue(column.Name)
-		marker := ""
-		if t := s.current(); t.sorted && t.sortColumn == col {
-			marker = " ▲"
-			if t.sortDesc {
-				marker = " ▼"
-			}
-		}
-		name := truncateCells(header, max(1, widths[col]-len([]rune(marker)))) + marker
-		header = tview.Escape(name)
-		// Types live in the footer inspector; showing them only where they happen to fit made headers uneven.
-		header += strings.Repeat(" ", max(0, widths[col]-tview.TaggedStringWidth(header)))
-		s.grid.GetCell(0, col).SetText(header).SetMaxWidth(widths[col])
-		for row, values := range s.viewRows {
-			s.grid.GetCell(row+1, col).SetText(tview.Escape(gridValue(rowValue(values, col), column, widths[col]))).SetMaxWidth(widths[col])
-		}
-	}
+	g.setWidths(widths)
 }
 
 func (s *state) resultKey(key rune) bool {

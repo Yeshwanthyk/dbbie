@@ -137,12 +137,11 @@ func (s *state) showTab() {
 	}
 	s.refreshCell()
 	if len(t.result.Columns) == 0 && t.err == nil {
-		s.grid.Clear()
 		notice := t.notice
 		if notice == "" {
 			notice = "Open a table or run a query"
 		}
-		s.grid.SetCell(0, 0, tview.NewTableCell(notice).SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))
+		s.gridView.empty = notice
 	}
 	s.message = ""
 	if t.err != nil {
