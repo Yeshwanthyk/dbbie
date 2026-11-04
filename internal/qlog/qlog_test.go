@@ -97,9 +97,11 @@ func TestTornFinalLine(t *testing.T) {
 			if err := os.WriteFile(l.path, append(before, tail...), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			entries, err := l.List(0)
-			if err != nil || len(entries) != 1 {
-				t.Fatalf("List torn = %v, %v", entries, err)
+			for _, limit := range []int{0, 1, 5} {
+				entries, err := l.List(limit)
+				if err != nil || len(entries) != 1 || entries[0].ID != "q_0001" {
+					t.Fatalf("List(%d) torn = %v, %v", limit, entries, err)
+				}
 			}
 			if _, err := l.Get("q_0001"); err != nil {
 				t.Fatal(err)
@@ -118,7 +120,7 @@ func TestTornFinalLine(t *testing.T) {
 			if !strings.HasPrefix(string(after), string(before)) {
 				t.Fatal("completed lines changed")
 			}
-			entries, err = l.List(0)
+			entries, err := l.List(0)
 			if err != nil || len(entries) != 2 {
 				t.Fatalf("List recovered = %v, %v", entries, err)
 			}
@@ -441,5 +443,85 @@ func TestInvalidInputsAndCorruption(t *testing.T) {
 	}
 	if _, err := l.Append(Entry{}); err == nil {
 		t.Fatal("appended to corrupt completed log")
+	}
+}
+
+// Lines larger than the reverse-read chunk exercise tail reads and binary
+// search across chunk boundaries; ids not written by Append never match.
+func TestLargeLinesTailAndSearch(t *testing.T) {
+	l := testLog(t)
+	const count = 9
+	for i := 1; i <= count; i++ {
+		rows := make([][]any, 0, i*40)
+		for r := 0; r < cap(rows); r++ {
+			rows = append(rows, []any{strings.Repeat("x", 100), r})
+		}
+		if _, err := l.Append(Entry{SQL: "select 1", Rows: rows}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if size, err := l.Size(); err != nil || size < 3*64<<10 {
+		t.Fatalf("fixture too small: %d, %v", size, err)
+	}
+	entries, err := l.List(3)
+	if err != nil || len(entries) != 3 || entries[0].ID != "q_0007" || entries[2].ID != "q_0009" || len(entries[2].Rows) != 360 {
+		t.Fatalf("List(3) = %d entries, %v", len(entries), err)
+	}
+	for i := 1; i <= count; i++ {
+		id := fmt.Sprintf("q_%04d", i)
+		e, err := l.Get(id)
+		if err != nil || e.ID != id || len(e.Rows) != i*40 {
+			t.Fatalf("Get(%s) = %s, %d rows, %v", id, e.ID, len(e.Rows), err)
+		}
+	}
+	for _, id := range []string{"q_0", "q_0000", "q_0010", "q_1", "q_+1", "q_-1", "q_", "1", "q_0001 "} {
+		if _, err := l.Get(id); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("Get(%q) = %v", id, err)
+		}
+	}
+}
+
+// Append, List and Get validate the lines they read; the newest complete line
+// is always read, so its corruption blocks allocation.
+func TestInvalidNewestLine(t *testing.T) {
+	for _, tc := range []struct {
+		name, line string
+		decodes    bool // List returns lines that decode; only Append checks ids
+	}{
+		{"not json", "bad", false},
+		{"missing id", `{"v":1}`, true},
+		{"foreign id", `{"v":1,"id":"x_0003"}`, true},
+		{"zero id", `{"v":1,"id":"q_0000"}`, true},
+		{"wrong field type", `{"v":1,"id":"q_0003","rows":"x"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l := testLog(t)
+			for i := 0; i < 2; i++ {
+				if _, err := l.Append(Entry{}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f, err := os.OpenFile(l.path, os.O_WRONLY|os.O_APPEND, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.WriteString(tc.line + "\n"); err != nil {
+				t.Fatal(err)
+			}
+			_ = f.Close()
+			before, err := os.ReadFile(l.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := l.Append(Entry{}); err == nil {
+				t.Fatal("appended after invalid newest line")
+			}
+			if after, _ := os.ReadFile(l.path); string(after) != string(before) {
+				t.Fatal("failed append changed the log")
+			}
+			if _, err := l.List(1); (err == nil) != tc.decodes {
+				t.Fatalf("List(1) = %v, decodes %v", err, tc.decodes)
+			}
+		})
 	}
 }

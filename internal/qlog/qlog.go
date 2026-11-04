@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -141,6 +142,71 @@ func scan(r io.Reader, fn func(Entry) error) (int64, error) {
 	}
 }
 
+// parseID returns the sequence number of an id written by Append ("q_" + digits).
+func parseID(id string) (uint64, bool) {
+	digits, ok := strings.CutPrefix(id, "q_")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(digits, 10, 64)
+	return n, err == nil
+}
+
+// committedEnd is the boundary after the last complete line; bytes past it are
+// a torn suffix that readers ignore and the next Append truncates.
+func committedEnd(f *os.File) (int64, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return lineBoundary(f, info.Size())
+}
+
+// readLine returns the complete line that starts at start, ending at or before
+// end, and the offset after its newline.
+func readLine(f *os.File, start, end int64) ([]byte, int64, error) {
+	r := bufio.NewReaderSize(io.NewSectionReader(f, start, end-start), 64<<10)
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		// Callers pass committed boundaries, so a missing newline means the
+		// file changed under the lock.
+		return nil, 0, fmt.Errorf("query log line at byte %d is incomplete: %w", start, err)
+	}
+	return line, start + int64(len(line)), nil
+}
+
+func decodeLine(line []byte, offset int64, v any) error {
+	if err := json.Unmarshal(line, v); err != nil {
+		return fmt.Errorf("invalid query log line at byte %d: %w", offset, err)
+	}
+	return nil
+}
+
+// tail decodes up to limit complete lines that end at end, newest first.
+func tail(f *os.File, end int64, limit int) ([]Entry, error) {
+	var entries []Entry
+	for end > 0 && len(entries) < limit {
+		start, err := lineBoundary(f, end-1)
+		if err != nil {
+			return nil, err
+		}
+		line := make([]byte, end-start)
+		if _, err := f.ReadAt(line, start); err != nil {
+			return nil, err
+		}
+		var e Entry
+		if err := decodeLine(line, start, &e); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+		end = start
+	}
+	return entries, nil
+}
+
+// Append allocates the next id from the last complete line only. Ids are
+// strictly increasing because every writer allocates under LOCK_EX from the
+// newest committed entry, so the last line holds the maximum.
 func (l *Log) Append(e Entry) (Entry, error) {
 	if len(e.Rows) > query.MaxPreviewLimit {
 		return Entry{}, errors.New("query log preview exceeds 1000 rows")
@@ -150,20 +216,24 @@ func (l *Log) Append(e Entry) (Entry, error) {
 		return Entry{}, err
 	}
 	defer unlock(f)
-	var last uint64
-	offset, err := scan(f, func(stored Entry) error {
-		if !strings.HasPrefix(stored.ID, "q_") {
-			return errors.New("invalid query log id")
-		}
-		n, err := strconv.ParseUint(strings.TrimPrefix(stored.ID, "q_"), 10, 64)
-		if err != nil || n <= last {
-			return errors.New("invalid query log sequence")
-		}
-		last = n
-		return nil
-	})
+	offset, err := committedEnd(f)
 	if err != nil {
 		return Entry{}, err
+	}
+	newest, err := tail(f, offset, 1)
+	if err != nil {
+		return Entry{}, err
+	}
+	var last uint64
+	if len(newest) == 1 {
+		n, ok := parseID(newest[0].ID)
+		if !ok {
+			return Entry{}, errors.New("invalid query log id")
+		}
+		if n == 0 {
+			return Entry{}, errors.New("invalid query log sequence")
+		}
+		last = n
 	}
 	if last == ^uint64(0) {
 		return Entry{}, errors.New("query log sequence exhausted")
@@ -196,54 +266,95 @@ func (l *Log) Append(e Entry) (Entry, error) {
 	return e, nil
 }
 
+// List returns the newest limit entries in log order, or every entry when
+// limit <= 0. A positive limit reads and decodes only those lines.
 func (l *Log) List(limit int) ([]Entry, error) {
 	f, err := l.lock(syscall.LOCK_SH)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock(f)
-	entries := make([]Entry, 0)
-	// A ring keeps only the requested recent entries while scanning the file.
-	var count int
-	_, err = scan(f, func(e Entry) error {
-		if limit <= 0 || len(entries) < limit {
-			entries = append(entries, e)
-		} else {
-			entries[count%limit] = e
+	if limit > 0 {
+		end, err := committedEnd(f)
+		if err != nil {
+			return nil, err
 		}
-		count++
+		entries, err := tail(f, end, limit)
+		if err != nil {
+			return nil, err
+		}
+		slices.Reverse(entries)
+		if entries == nil {
+			entries = make([]Entry, 0)
+		}
+		return entries, nil
+	}
+	entries := make([]Entry, 0)
+	_, err = scan(f, func(e Entry) error {
+		entries = append(entries, e)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	if limit > 0 && count > limit {
-		start := count % limit
-		entries = append(entries[start:], entries[:start]...)
-	}
 	return entries, nil
 }
 
+// Get binary-searches committed lines by id number, relying on the strictly
+// increasing ids Append writes. Probes decode only the id; the match is
+// decoded in full.
 func (l *Log) Get(id string) (Entry, error) {
+	target, ok := parseID(id)
+	if !ok {
+		return Entry{}, ErrNotFound
+	}
 	f, err := l.lock(syscall.LOCK_SH)
 	if err != nil {
 		return Entry{}, err
 	}
 	defer unlock(f)
-	var found Entry
-	_, err = scan(f, func(e Entry) error {
-		if e.ID == id {
-			found = e
-		}
-		return nil
-	})
+	hi, err := committedEnd(f)
 	if err != nil {
 		return Entry{}, err
 	}
-	if found.ID == "" {
-		return Entry{}, ErrNotFound
+	var lo int64 // lo and hi are always line boundaries
+	for lo < hi {
+		start, err := lineBoundary(f, lo+(hi-lo)/2)
+		if err != nil {
+			return Entry{}, err
+		}
+		start = max(start, lo)
+		line, next, err := readLine(f, start, hi)
+		if err != nil {
+			return Entry{}, err
+		}
+		var head struct {
+			ID string `json:"id"`
+		}
+		if err := decodeLine(line, start, &head); err != nil {
+			return Entry{}, err
+		}
+		n, ok := parseID(head.ID)
+		if !ok {
+			return Entry{}, fmt.Errorf("invalid query log id at byte %d", start)
+		}
+		switch {
+		case n < target:
+			lo = next
+		case n > target:
+			hi = start
+		default:
+			var e Entry
+			if err := decodeLine(line, start, &e); err != nil {
+				return Entry{}, err
+			}
+			if e.ID != id {
+				return Entry{}, ErrNotFound
+			}
+			return e, nil
+		}
 	}
-	return found, nil
+	return Entry{}, ErrNotFound
 }
 
 func (l *Log) Size() (int64, error) {
@@ -269,7 +380,7 @@ func lineBoundary(f *os.File, offset int64) (int64, error) {
 		return 0, err
 	}
 	offset = min(offset, info.Size())
-	var buf [4096]byte
+	var buf [64 << 10]byte
 	for offset > 0 {
 		start := max(int64(0), offset-int64(len(buf)))
 		n, err := f.ReadAt(buf[:offset-start], start)
