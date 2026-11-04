@@ -187,9 +187,7 @@ type state struct {
 	resultPane                                 *resultsFrame
 	resultPages                                *tview.Pages
 	viewRows                                   [][]any
-	highlightedRow                             int
-	naturalWidths                              []int
-	gridViewportWidth                          int
+	gridView                                   *gridView
 	screen                                     tcell.Screen
 	clipboardWriter                            io.Writer
 	copiedUntil                                time.Time

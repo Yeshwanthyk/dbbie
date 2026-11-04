@@ -44,7 +44,10 @@ func (s *state) layout() tview.Primitive {
 	s.sqlView.SetWrap(true).SetWordWrap(false)
 	s.why.SetWrap(true)
 	s.grid = tview.NewTable().SetBorders(false).SetSeparator('│').SetSelectable(true, true).SetFixed(1, 0).
-		SetEvaluateAllRows(true).SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
+		SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
+	// Padded headers pin column widths, so tview need only measure visible rows.
+	s.gridView = &gridView{s: s, viewport: -1}
+	s.grid.SetContent(s.gridView)
 	s.grid.SetBordersColor(s.theme.TCell(s.theme.Border))
 	s.grid.SetBackgroundColor(s.theme.TCell(s.theme.Panel))
 	s.grid.SetSelectionChangedFunc(s.selectionChanged)

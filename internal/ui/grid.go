@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/yeshwanthyk/dbbie/internal/query"
 )
@@ -31,50 +30,14 @@ func (s *state) renderResult(result query.Result) {
 }
 
 func (s *state) renderGrid(result query.Result) {
-	s.grid.Clear().SetOffset(0, 0)
+	s.grid.SetOffset(0, 0)
 	s.viewRows = result.Rows
 	widths := columnWidths(result)
-	for col, c := range result.Columns {
-		header := displayValue(c.Name)
-		if t := s.current(); t.sorted && t.sortColumn == col {
-			marker := " ▲"
-			if t.sortDesc {
-				marker = " ▼"
-			}
-			header = truncateCells(header, maxColumnWidth-2) + marker
-			widths[col] = max(widths[col], tview.TaggedStringWidth(tview.Escape(header)))
-		}
-		// Padding the header fixes the sampled width even when a short row is
-		// the only visible row; tview otherwise sizes just the viewport.
-		header = truncateCells(header, widths[col])
-		header += strings.Repeat(" ", max(0, widths[col]-tview.TaggedStringWidth(tview.Escape(header))))
-		s.grid.SetCell(0, col, tview.NewTableCell(tview.Escape(header)).
-			SetTextColor(s.theme.TCell(s.theme.Primary)).
-			SetBackgroundColor(s.theme.TCell(s.theme.Panel)).
-			SetAttributes(tcell.AttrBold|tcell.AttrUnderline).
-			SetSelectable(false).SetMaxWidth(widths[col]))
+	if t := s.current(); t.sorted && t.sortColumn < len(widths) {
+		header := truncateCells(displayValue(result.Columns[t.sortColumn].Name), maxColumnWidth-2) + " ▲"
+		widths[t.sortColumn] = max(widths[t.sortColumn], cellWidth(header))
 	}
-	for rowIdx, row := range result.Rows {
-		for colIdx, column := range result.Columns {
-			value := rowValue(row, colIdx)
-			cell := tview.NewTableCell(tview.Escape(gridValue(value, column, widths[colIdx]))).SetMaxWidth(widths[colIdx])
-			if _, ok := numericValue(value, column); ok {
-				cell.SetAlign(tview.AlignRight)
-			}
-			s.grid.SetCell(rowIdx+1, colIdx, cell)
-		}
-	}
-	if len(result.Rows) == 0 {
-		row := 0
-		if len(result.Columns) > 0 {
-			row = 1
-		}
-		s.grid.SetCell(row, 0, tview.NewTableCell("0 rows").SetSelectable(false).SetTextColor(s.theme.TCell(s.theme.Muted)))
-	}
-	s.naturalWidths = widths
-	s.gridViewportWidth = -1
-	s.highlightedRow = 0
-	s.resetGridStyles()
+	s.gridView.reset(widths, "0 rows")
 	s.refreshCell()
 }
 
@@ -178,55 +141,9 @@ func (s *state) advanceSearch(delta int) {
 }
 
 func (s *state) applySearchMatch() {
-	s.resetGridStyles()
 	active := s.searchMatches[s.searchIndex]
 	s.grid.Select(active.Row, active.Col)
 	s.setMessage(fmt.Sprintf("/ %s · match %d/%d", displayValue(s.current().rowFilter), s.searchIndex+1, len(s.searchMatches)))
-}
-
-func (s *state) styleRow(row int) {
-	if row < 1 || row > len(s.viewRows) {
-		return
-	}
-	selected, _ := s.grid.GetSelection()
-	for col, column := range s.current().result.Columns {
-		cell := s.grid.GetCell(row, col)
-		value := rowValue(s.viewRows[row-1], col)
-		fg, bg := s.theme.Text, s.theme.Background
-		if row%2 == 0 {
-			bg = s.theme.Panel
-		}
-		if row == selected {
-			bg = s.theme.Selection
-		}
-		attr := tcell.AttrNone
-		if value == nil {
-			fg = s.theme.Muted
-		} else if b, ok := boolValue(value, column); ok {
-			fg = s.theme.Danger
-			if b {
-				fg = s.theme.Success
-			}
-		}
-		cell.SetStyle(s.theme.CellStyle(fg, bg).Attributes(attr)).SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
-	}
-	// Matches stay recognizable without painting every result bright yellow.
-	for i, match := range s.searchMatches {
-		if match.Row != row {
-			continue
-		}
-		cell := s.grid.GetCell(match.Row, match.Col)
-		cell.SetTextColor(s.theme.TCell(s.theme.Accent))
-		if i == s.searchIndex {
-			cell.SetBackgroundColor(s.theme.TCell(s.theme.Accent)).SetTextColor(s.theme.TCell(s.theme.Background))
-		}
-	}
-}
-
-func (s *state) resetGridStyles() {
-	for row := 1; row <= len(s.viewRows); row++ {
-		s.styleRow(row)
-	}
 }
 
 func (s *state) cursorValue() (any, int, bool) {
@@ -239,9 +156,6 @@ func (s *state) cursorValue() (any, int, bool) {
 
 func (s *state) selectionChanged(row, col int) {
 	s.current().cursor = gridPos{Row: row, Col: col}
-	s.styleRow(s.highlightedRow)
-	s.styleRow(row)
-	s.highlightedRow = row
 	s.refreshCell()
 	if s.current().record {
 		s.renderRecord()
