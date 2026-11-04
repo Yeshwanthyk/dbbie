@@ -149,11 +149,13 @@ func boolValue(value any, column query.Column) (bool, bool) {
 	return false, false
 }
 
-// cellWidth is the screen width of plain (untagged) text.
+// cellWidth is the width tview gives escaped text. Printable ASCII with no
+// '[' is one cell per byte; anything else goes to tview, which measures some
+// escaped '[' runs narrower than uniseg does.
 func cellWidth(text string) int {
 	for i := 0; i < len(text); i++ {
-		if c := text[i]; c < 0x20 || c >= 0x7f {
-			return uniseg.StringWidth(text)
+		if c := text[i]; c < 0x20 || c >= 0x7f || c == '[' {
+			return tview.TaggedStringWidth(tview.Escape(text))
 		}
 	}
 	return len(text)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/rivo/uniseg"
 	"github.com/yeshwanthyk/dbbie/internal/query"
 )
 
@@ -399,6 +401,45 @@ func TestCellWidthMatchesTView(t *testing.T) {
 	for _, text := range []string{"", "plain", "[red]tag", "帳戶名字", "éab", `x\u001b[31m\ty`, "∅", "2026-10-05 16:48:31", "a▲"} {
 		if got, want := cellWidth(text), tview.TaggedStringWidth(tview.Escape(text)); got != want {
 			t.Fatalf("cellWidth(%q)=%d want %d", text, got, want)
+		}
+	}
+}
+
+// Fast width, escape and truncate paths must agree with tview on arbitrary
+// text, including '[' runs, graphemes and control characters.
+func TestFastTextPathsMatchTview(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	alphabet := []rune("ab[]red:-#\"_ ,;.Z09世界é́😀‍\n\t\x1b")
+	for range 20000 {
+		var b strings.Builder
+		for range r.Intn(30) {
+			if r.Intn(3) == 0 {
+				b.WriteRune(alphabet[r.Intn(len(alphabet))])
+			} else {
+				b.WriteByte(byte(0x20 + r.Intn(0x5f)))
+			}
+		}
+		text := displayValue(b.String())
+		if got, want := cellWidth(text), tview.TaggedStringWidth(tview.Escape(text)); got != want {
+			t.Fatalf("width %q = %d, tview %d", text, got, want)
+		}
+		if escapeTags(text) != tview.Escape(text) {
+			t.Fatalf("escape %q", text)
+		}
+		width := r.Intn(25)
+		want := text
+		if width <= 0 {
+			want = ""
+		} else if tview.TaggedStringWidth(tview.Escape(text)) > width {
+			var out strings.Builder
+			used := 0
+			for g := uniseg.NewGraphemes(text); g.Next() && used+g.Width() <= width-1; used += g.Width() {
+				out.WriteString(g.Str())
+			}
+			want = out.String() + "…"
+		}
+		if got := truncateCells(text, width); got != want {
+			t.Fatalf("truncate %q to %d = %q, want %q", text, width, got, want)
 		}
 	}
 }
