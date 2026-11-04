@@ -44,6 +44,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	switch args[0] {
+	case "version", "--version", "-v":
+		return printVersion(stdout)
 	case "connect":
 		return connect(args[1:], stdout)
 	case "connections":
@@ -92,6 +94,7 @@ Usage:
   dbbie show <id> --conn <name> [--offset 0] [--limit 100] [--json]
   dbbie open [--conn <name> | --driver <postgres|mysql> --dsn <dsn> [--save <name>]] [--session <name> | --sql <sql>] [--follow] [--recent 5] [--no-log]
   dbbie tools [--json]
+  dbbie version
   dbbie serve-mcp (not implemented)
 
 JSON is the default when stdout is not a terminal; --json=false prints human-readable output.

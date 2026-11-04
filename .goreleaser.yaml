@@ -1,0 +1,70 @@
+# Release build: `git tag vX.Y.Z && git push origin vX.Y.Z` runs
+# .github/workflows/release.yml, which runs this. Local dry run:
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: dbbie
+
+before:
+  hooks:
+    - go mod tidy -diff
+    - go test -count=1 ./...
+
+builds:
+  - id: dbbie
+    main: ./cmd/dbbie
+    binary: dbbie
+    env:
+      - CGO_ENABLED=0
+    # No windows: internal/qlog locks the log with Unix flock.
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/yeshwanthyk/dbbie/internal/cli.version={{ .Version }}
+      - -X github.com/yeshwanthyk/dbbie/internal/cli.commit={{ .Commit }}
+      - -X github.com/yeshwanthyk/dbbie/internal/cli.date={{ .Date }}
+
+archives:
+  - id: dbbie
+    # dbbie_0.1.0_darwin_arm64.tar.gz; install.sh depends on this name.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^log:"
+      - "^merge "
+
+release:
+  github:
+    owner: Yeshwanthyk
+    name: dbbie
+
+homebrew_casks:
+  - name: dbbie
+    repository:
+      owner: Yeshwanthyk
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/Yeshwanthyk/dbbie
+    description: Terminal cockpit for Postgres and MySQL, built for humans and agents
+    binaries: [dbbie]
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    hooks:
+      post:
+        # The binary is not notarized; without this macOS refuses to run it.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/dbbie"]
+          end
