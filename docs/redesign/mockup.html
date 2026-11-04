@@ -1,0 +1,235 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--t-bg:#0D1117;--t-panel:#161B22;--t-border:#30363D;--t-pri:#7DD3FC;--t-acc:#F2CC60;--t-text:#F0F6FC;--t-mut:#8B949E;--t-dan:#FF7B72;--t-ok:#7EE787;--t-sel:#1F2A37;--t-agent:#D2A8FF}
+body{font-family:var(--font-sans);margin:0}
+h2{font-size:15px;margin:22px 0 6px}
+p.lede{color:var(--muted-foreground);font-size:13px;margin:0 0 10px;line-height:1.45}
+.term{background:var(--t-bg);color:var(--t-text);font-family:var(--font-mono);font-size:9.5px;line-height:1.55;border-radius:var(--radius);padding:10px;outline:none;border:1px solid var(--t-border);user-select:none}
+.term:focus{border-color:var(--t-pri)}
+.bar{display:flex;gap:2px;align-items:center;white-space:nowrap;overflow:hidden}
+.badge{background:var(--t-pri);color:var(--t-bg);font-weight:700;padding:0 6px;border-radius:3px}
+.conn{color:var(--t-mut);margin:0 10px 0 6px}.conn b{color:var(--t-ok);font-weight:400}
+.tab{padding:0 8px;color:var(--t-mut);border-bottom:2px solid transparent;cursor:pointer}
+.tab.on{color:var(--t-text);border-bottom-color:var(--t-pri);background:var(--t-panel)}
+.tab .n{color:var(--t-mut);margin-right:4px}.tab.agent .n{color:var(--t-agent)}
+.tab .dot{color:var(--t-agent)}
+.main{display:grid;grid-template-columns:205px 1fr;gap:8px;margin-top:6px}
+.pane{border:1px solid var(--t-border);border-radius:4px;background:var(--t-panel);padding:4px 6px;min-width:0}
+.pane.focus{border-color:var(--t-pri)}
+.ptitle{color:var(--t-mut);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between}
+.filter{color:var(--t-acc);margin:2px 0 4px}.filter .cur{background:var(--t-acc);color:var(--t-bg)}
+.tbl{display:flex;justify-content:space-between;padding:0 4px;border-radius:2px;white-space:nowrap}
+.tbl .nm{overflow:hidden;text-overflow:ellipsis}.tbl .ct{color:var(--t-mut);margin-left:6px}
+.tbl.empty .nm,.tbl.empty .ct{color:#545d68}
+.tbl.sel{background:var(--t-pri);color:var(--t-bg)}.tbl.sel .ct{color:var(--t-bg)}
+.tbl mark{background:none;color:var(--t-acc);font-weight:700}.tbl.sel mark{color:var(--t-bg);text-decoration:underline}
+.why{color:var(--t-agent);margin-bottom:2px}
+.sql{color:var(--t-text)}.kw{color:var(--t-pri)}.str{color:var(--t-ok)}
+.right{display:flex;flex-direction:column;gap:6px;min-width:0}
+#gridwrap{overflow-x:auto}table.g{border-collapse:collapse;width:100%;table-layout:auto}
+table.g th{color:var(--t-pri);text-align:left;font-weight:600;border-bottom:1px solid var(--t-border);padding:0 6px;white-space:nowrap}
+table.g th small{color:var(--t-mut);font-weight:400;margin-left:3px}
+table.g td{padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t-text);max-width:96px}
+table.g tr.cr td{background:var(--t-sel)}
+table.g td.cc{background:var(--t-pri)!important;color:var(--t-bg)}
+td.null{color:#545d68!important;font-style:italic}td.num{text-align:right}
+td.st{color:var(--t-ok)}
+.gfoot{display:flex;justify-content:space-between;color:var(--t-mut);margin-top:3px;border-top:1px solid var(--t-border);padding-top:2px}
+.gfoot b{color:var(--t-text);font-weight:400}
+.rec{display:none}.rec.on{display:block}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:0 10px}.kv .k{color:var(--t-pri);text-align:right}.kv .t{color:var(--t-mut)}
+.mode{display:flex;gap:10px;margin-top:6px;white-space:nowrap;overflow:hidden}
+.mtag{background:var(--t-ok);color:var(--t-bg);font-weight:700;padding:0 5px;border-radius:2px}
+.mode .k{color:var(--t-pri)}.mode span{color:var(--t-mut)}
+.hint{font-size:12px;color:var(--muted-foreground);margin:6px 0 0}
+.hint kbd,td kbd{font-family:var(--font-mono);font-size:11px;background:var(--secondary);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.cols{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
+table.k{width:100%;border-collapse:collapse;font-size:12px}
+table.k td{padding:3px 6px;border-bottom:1px solid var(--border);vertical-align:top}
+table.k td:first-child{white-space:nowrap;width:1%}
+table.k tr.h td{font-weight:600;color:var(--muted-foreground);font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--foreground)}
+table.k .new{color:var(--success);font-size:10px;margin-left:4px}
+pre.cli{background:var(--code-background);font-family:var(--font-mono);font-size:11.5px;padding:12px 16px;border-radius:var(--radius);overflow:auto;line-height:1.5;margin:0}
+pre.cli .c{color:var(--muted-foreground)}
+.fix{font-size:12.5px;margin:0;padding-left:18px;line-height:1.6}
+.fix b{font-weight:600}
+</style></head><body>
+
+<h2>1 · The TUI, redesigned: click it, then use vim keys</h2>
+<p class="lede">Each query gets a tab. Purple tabs are queries an agent ran, with its stated reason shown above the SQL. The sidebar shows row counts, so empty tables are visible before you open one.</p>
+
+<div class="term" id="term" tabindex="0">
+  <div class="bar" id="tabs"></div>
+  <div class="main">
+    <div class="pane" id="side">
+      <div class="ptitle"><span>tables</span><span id="tcount"></span></div>
+      <div class="filter" id="filter"></div>
+      <div id="tlist"></div>
+    </div>
+    <div class="right">
+      <div class="pane"><div class="ptitle"><span id="qtitle">query</span><span id="qmeta"></span></div><div id="why" class="why"></div><div class="sql" id="sql"></div></div>
+      <div class="pane focus" id="gridp">
+        <div class="ptitle"><span id="rtitle">results</span><span id="rmeta"></span></div>
+        <div id="gridwrap"></div>
+        <div class="rec" id="rec"></div>
+        <div class="gfoot" id="gfoot"></div>
+      </div>
+    </div>
+  </div>
+  <div class="mode" id="mode"></div>
+</div>
+<p class="hint">Try: <kbd>j</kbd><kbd>k</kbd><kbd>h</kbd><kbd>l</kbd> move · <kbd>w</kbd>/<kbd>b</kbd> next/prev column · <kbd>Enter</kbd> record view · <kbd>Ctrl-h</kbd> then <kbd>Enter</kbd>/<kbd>o</kbd> open a table here / in a new tab · <kbd>gt</kbd>/<kbd>gT</kbd> or <kbd>1</kbd>–<kbd>9</kbd> switch tabs · <kbd>Ctrl-h</kbd>/<kbd>Ctrl-l</kbd> move between panes · <kbd>/</kbd> filter (it filters whichever pane has focus) · <kbd>Esc</kbd></p>
+
+<h2>2 · How agents and you share one query log</h2>
+<p class="lede">Agents call the CLI. Every run is appended to a log file, and a TUI started with <code>--follow</code> opens a tab for each new entry. Nodes marked new don't exist yet; the others are today's code.</p>
+<script type="text/viz">
+title Agent and human queries flow into one log
+== graph Shared query log
+ranks: Who runs it | dbbie | Shared state | What comes out
+-- Who runs it
+agent: AI agent [actor] # shells out, no MCP needed
+you: You, in the TUI [actor]
+-- dbbie
+cli: dbbie query --why [cli] @internal/cli/cli.go:83
+  does: parses flags; --why and --title are new
+runner: query.Runner.Run @internal/query/query.go:54
+  does: read-only tx, server-side LIMIT, timeout
+  fails: writes and multi-statement SQL are rejected
+-- Shared state
++log: Query log [store] # ~/.local/state/dbbie/local.jsonl
+  writes: id, who, why, sql, columns, preview rows, elapsed, error
+-- What comes out
++tabs: TUI tab per query [result] # dbbie open --follow
+json: JSON to the agent [result]
+reject: Rejected [result]
+agentrun: agent > cli > runner > log => tabs | dbbie query --why "..." | The agent states its reason; you see it as a purple tab.
+agentjson: agent > cli > runner => json | --json | The agent gets an id like q_0042 plus bounded rows.
+humanrun: you > runner > log => tabs | :select ... | Your own queries go to the same log, so tabs survive restarts.
+blocked: agent > cli > runner =| reject | delete from ... | Writes never reach the database or the log.
+</script>
+<script src="https://cdn.jsdelivr.net/gh/Yeshwanthyk/agent-skills@d3a5f3050a2c90cc472be6fb9ab26f34cea59ebd/skills/viz/assets/viz.js"></script>
+
+<h2>3 · Agents use the CLI first; MCP can wait</h2>
+<p class="lede">Agents already run shell commands, so a good CLI works with every agent today. An MCP server could later wrap these same commands without changing them.</p>
+<pre class="cli"><span class="c"># discover</span>
+dbbie connections --json
+dbbie tables  --conn local --match 'balance*' --json      <span class="c"># + estimated row counts</span>
+dbbie describe --conn local --table balanceapi_account --json
+
+<span class="c"># run: every query is logged with who ran it and why</span>
+dbbie query --conn local --why "find businesses with no balance account" \
+  --sql "select ..." --limit 50 --json                    <span class="c"># → {"id":"q_0042", rows, truncated, ...}</span>
+
+<span class="c"># read back without re-running</span>
+dbbie show q_0042 --offset 50 --limit 50 --json             <span class="c"># page through a saved preview</span>
+dbbie log --conn local --json                               <span class="c"># what has run this session</span>
+
+<span class="c"># watch it live</span>
+dbbie open --conn local --follow                            <span class="c"># a tab opens per new agent query</span></pre>
+<p class="hint">Contract: <code>--json</code> is the default when stdout isn't a terminal · errors come back as <code>{"error":{"code","message"}}</code> with a non-zero exit code · <code>dbbie tools --json</code> lists all of this for agents to discover.</p>
+
+<h2>4 · Vim keymap</h2>
+<div class="cols">
+<table class="k">
+<tr class="h"><td colspan="2">Anywhere</td></tr>
+<tr><td><kbd>Ctrl-h</kbd> <kbd>Ctrl-l</kbd></td><td>Focus the sidebar or the results<span class="new">new</span></td></tr>
+<tr><td><kbd>gt</kbd> <kbd>gT</kbd> <kbd>1</kbd>–<kbd>9</kbd></td><td>Next, previous, or numbered tab<span class="new">new</span></td></tr>
+<tr><td><kbd>t</kbd></td><td>Fuzzy table finder, from any pane<span class="new">new</span></td></tr>
+<tr><td><kbd>i</kbd></td><td>Edit this tab's SQL; <kbd>Enter</kbd> runs it, <kbd>Esc</kbd> leaves</td></tr>
+<tr><td><kbd>:</kbd></td><td>Commands: <code>:q</code> closes the tab, <code>:qa</code> quits, <code>:theme</code>, raw SQL</td></tr>
+<tr><td><kbd>?</kbd></td><td>Help overlay listing every key<span class="new">new</span></td></tr>
+<tr class="h"><td colspan="2">Sidebar</td></tr>
+<tr><td><kbd>j</kbd> <kbd>k</kbd> <kbd>gg</kbd> <kbd>G</kbd></td><td>Move through tables</td></tr>
+<tr><td><kbd>/</kbd></td><td>Filter table names (fuzzy)<span class="new">new</span></td></tr>
+<tr><td><kbd>Enter</kbd> <kbd>o</kbd></td><td>Open in this tab, or in a new tab<span class="new">new</span></td></tr>
+<tr><td><kbd>K</kbd></td><td>Describe the table's columns<span class="new">new</span></td></tr>
+</table>
+<table class="k">
+<tr class="h"><td colspan="2">Results</td></tr>
+<tr><td><kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd></td><td>Move by cell</td></tr>
+<tr><td><kbd>w</kbd> <kbd>b</kbd> <kbd>0</kbd> <kbd>$</kbd></td><td>Next or previous column; first or last column<span class="new">new</span></td></tr>
+<tr><td><kbd>gg</kbd> <kbd>G</kbd> <kbd>Ctrl-d</kbd> <kbd>Ctrl-u</kbd></td><td>Top, bottom, half a page down or up<span class="new">new</span></td></tr>
+<tr><td><kbd>Enter</kbd></td><td>Record view: the whole row as column → full value<span class="new">new</span></td></tr>
+<tr><td><kbd>/</kbd> <kbd>n</kbd> <kbd>N</kbd></td><td>Filter rows; jump to the next or previous match</td></tr>
+<tr><td><kbd>yy</kbd> <kbd>Y</kbd></td><td>Copy the cell, or the row as JSON<span class="new">new</span></td></tr>
+<tr><td><kbd>s</kbd> <kbd>S</kbd></td><td>Sort by this column, ascending or descending<span class="new">new</span></td></tr>
+<tr><td><kbd>f</kbd></td><td>Re-query with <code>where col = this value</code><span class="new">new</span></td></tr>
+<tr><td><kbd>]a</kbd> <kbd>[a</kbd></td><td>Jump to the next or previous agent tab<span class="new">new</span></td></tr>
+</table>
+</div>
+
+<h2>5 · What changes from today</h2>
+<ul class="fix">
+<li><b>Search knows its pane.</b> Today <kbd>/</kbd> only filters result rows. Now it filters table names in the sidebar and rows in the results, and <kbd>t</kbd> finds a table from anywhere.</li>
+<li><b>Table names fit.</b> A flat list replaces the tree, so names are no longer cut off, and each shows an estimated row count (empty tables are dimmed).</li>
+<li><b>Columns size to their data.</b> Timestamps are shortened to <code>2026-10-05 16:48</code>, NULL is dimmed, numbers are right-aligned, and every header shows its type.</li>
+<li><b>Calmer highlighting.</b> The current row is a subtle band and the current cell a solid block, instead of everything in bright yellow. Panes use single borders, with the focused one in blue.</li>
+<li><b>The footer reads the current cell:</b> column, type, its full value, and the row position. An empty result says "0 rows" instead of showing a blank grid.</li>
+<li><b>Queries run in the background,</b> so a slow query no longer freezes the UI; <kbd>Ctrl-c</kbd> cancels it.</li>
+</ul>
+
+<script>
+const TABLES=[["accountingapi_balancesheetreport",0],["approvalpolicyapi_approvalpolicy",14],["auditlogapi_auditlog",869],["auth_group",3],["auth_permission",2184],["authorizationapi_businessauthorization",12],["balanceapi_account",24],["balanceapi_accountnumber",24],["balanceapi_businessbalance",9],["balanceapi_cardbalance",0],["balanceapi_ledgerevent",0],["bankapi_bankaccount",6],["django_content_type",546],["django_migrations",4279],["merchantapi_merchantcategorycode",1028]];
+const ACC={cols:[["state","varchar"],["account_type","varchar"],["business_id","uuid"],["available","numeric"],["closed_at","timestamptz"],["created_at","timestamptz"],["id","uuid"]],rows:[]};
+const types=["OPERATING","RESERVE","CARD","OPERATING"],bal=["12,430.18","0.00","880.00","3,100.55"];
+for(let i=0;i<9;i++)ACC.rows.push(["ACTIVE",types[i%4],["b7e1…","c40a…","0f92…"][i%3],bal[i%4],i==6?"2026-10-21 09:12":null,"2026-10-05 16:48",["472c1ac4","30549045","349136a6","ded02f35","6edcc676","14f67418","91f6992a","a178dd66","3341b074"][i]+"-f057-4e…"]);
+const PERM={cols:[["id","int4"],["name","varchar"],["content_type_id","int4"],["codename","varchar"]],rows:[[63,"Can delete export field",16,"delete_exportfield"],[64,"Can view export field",16,"view_exportfield"],[65,"Can add export state drift result",17,"add_exportstatedriftresult"],[66,"Can change export state drift result",17,"change_exportstatedriftresult"],[67,"Can delete export state drift result",17,"delete_exportstatedriftresult"],[68,"Can view export state drift result",17,"view_exportstatedriftresult"],[69,"Can add netsuite amortization mapping",18,"add_netsuiteamortizationmapping"]]};
+const ORPH={cols:[["business_id","uuid"],["legal_name","varchar"],["created_at","timestamptz"]],rows:[["9d21…","Northwind Labs Inc.","2026-09-30 11:02"],["e5aa…","Tidewater Supply Co.","2026-10-02 08:47"]]};
+const TABS=[
+ {title:"balanceapi_account",sql:'<span class="kw">select</span> * <span class="kw">from</span> public.balanceapi_account',d:ACC,ms:8,id:"q_0039"},
+ {title:"auth_permission",sql:'<span class="kw">select</span> * <span class="kw">from</span> public.auth_permission',d:PERM,ms:5,id:"q_0040",trunc:true,total:"100 of 2,184"},
+ {title:"orphan businesses",agent:true,why:'agent · "find businesses with no balance account"',sql:'<span class="kw">select</span> b.id <span class="kw">as</span> business_id, b.legal_name, b.created_at <span class="kw">from</span> businessapi_business b <span class="kw">left join</span> balanceapi_account a <span class="kw">on</span> a.business_id = b.id <span class="kw">where</span> a.id <span class="kw">is null</span>',d:ORPH,ms:14,id:"q_0042"},
+ {title:"balancesheetreport",agent:true,why:'agent · "check if balance sheet reports exist yet"',sql:'<span class="kw">select count</span>(*) <span class="kw">from</span> accountingapi_balancesheetreport',d:{cols:[["count","int8"]],rows:[]},ms:3,id:"q_0043"}];
+let qn=44;function mkTab(t){const rows=[];for(let i=0;i<Math.min(t[1],6);i++)rows.push([i+1,t[0].split("_").pop()+" "+(i+1),"2026-10-0"+(i+3)+" 09:1"+i]);return {title:t[0],sql:`<span class="kw">select</span> * <span class="kw">from</span> public.${t[0]}`,d:{cols:[["id","int8"],["name","varchar"],["created_at","timestamptz"]],rows},ms:4,id:"q_00"+(qn++),total:t[1]>6?"6 of "+fmtCount(t[1]):null}}
+let S={rq:"",rfilt:false,tab:0,row:0,col:0,focus:"grid",rec:false,filter:"",filtering:false,side:6,pend:""};
+const $=id=>document.getElementById(id);
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function fuzzy(name,q){if(!q)return {ok:true,html:esc(name)};let i=0,out="";for(const ch of name){if(i<q.length&&ch===q[i]){out+="<mark>"+esc(ch)+"</mark>";i++}else out+=esc(ch)}return {ok:i===q.length,html:out}}
+function visTables(){return TABLES.map(t=>({t,f:fuzzy(t[0],S.filter)})).filter(x=>x.f.ok)}
+function fmtCount(n){return n>=1000?(n/1000).toFixed(1)+"k":String(n)}
+function render(){
+ const T=TABS[S.tab];
+ $("tabs").innerHTML='<span class="badge">dbbie</span><span class="conn">local · postgres <b>●</b></span>'+TABS.map((t,i)=>`<span class="tab ${i==S.tab?"on":""} ${t.agent?"agent":""}" data-i="${i}"><span class="n">${i+1}</span>${t.agent?'<span class="dot">◆ </span>':""}${esc(t.title)}</span>`).join("");
+ document.querySelectorAll(".tab").forEach(el=>el.onclick=()=>{S.tab=+el.dataset.i;S.row=0;S.col=0;S.rec=false;S.rq="";render()});
+ const vt=visTables();S.side=Math.min(S.side,Math.max(0,vt.length-1));
+ $("tcount").textContent=vt.length+"/"+TABLES.length;
+ $("filter").innerHTML=S.filtering||S.filter?`/ ${esc(S.filter)}<span class="cur">${S.filtering?" ":""}</span>`:'<span style="color:#545d68">/ filter tables</span>';
+ $("tlist").innerHTML=vt.map((x,i)=>`<div class="tbl ${x.t[1]==0?"empty":""} ${S.focus=="side"&&i==S.side?"sel":""}"><span class="nm">${x.f.html}</span><span class="ct">${x.t[1]==0?"empty":fmtCount(x.t[1])}</span></div>`).join("");
+ $("side").classList.toggle("focus",S.focus=="side");$("gridp").classList.toggle("focus",S.focus=="grid");
+ $("qtitle").textContent=T.agent?"query · from agent":"query";$("qmeta").textContent=T.id;
+ $("why").innerHTML=T.why?esc(T.why):"";$("why").style.display=T.why?"block":"none";$("sql").innerHTML=T.sql;
+ const d={cols:T.d.cols,rows:S.rq?T.d.rows.filter(r=>r.some(v=>String(v).toLowerCase().includes(S.rq))):T.d.rows},R=d.rows.length;S.row=Math.min(S.row,Math.max(0,R-1));S.col=Math.min(S.col,d.cols.length-1);
+ $("rtitle").innerHTML=S.rec?"record "+(S.row+1)+"/"+R:"results"+(S.rfilt||S.rq?` <span style="color:var(--t-acc);text-transform:none">/ ${esc(S.rq)}${S.rfilt?"▌":""} · ${R}/${T.d.rows.length} rows</span>`:"");
+ $("rmeta").textContent=(T.total||R+" rows")+" · "+T.ms+"ms";
+ if(S.rec&&R){$("gridwrap").style.display="none";$("rec").classList.add("on");
+  $("rec").innerHTML='<div class="kv">'+d.cols.map((c,i)=>{const v=d.rows[S.row][i];return `<div class="k">${c[0]}</div><div>${v==null?'<span class="t">NULL</span>':esc(v).replace("…","-a6e2-91c4d7f0b812").replace("b7e1…","b7e1c2d4-0a11-4f3e-9c55-1e2f3a4b5c6d")} <span class="t">${c[1]}</span></div>`}).join("")+'</div>';
+ }else{$("rec").classList.remove("on");$("gridwrap").style.display="block";
+  let h='<table class="g"><tr>'+d.cols.map(c=>`<th>${c[0]}<small>${c[1]}</small></th>`).join("")+"</tr>";
+  if(!R)h+=`<tr><td colspan="${d.cols.length}" style="color:var(--t-mut);padding:14px 6px">${S.rq?"no rows match / "+esc(S.rq):"0 rows · this table is empty"}</td></tr>`;
+  d.rows.forEach((r,ri)=>{h+=`<tr class="${S.focus=="grid"&&ri==S.row?"cr":""}">`+r.map((v,ci)=>{let cls=[];if(v==null)cls.push("null");if(typeof v=="number"||/^[\d,]+\.\d\d$/.test(v))cls.push("num");if(v=="ACTIVE")cls.push("st");if(S.focus=="grid"&&ri==S.row&&ci==S.col)cls.push("cc");return `<td class="${cls.join(" ")}">${v==null?"NULL":esc(v)}</td>`}).join("")+"</tr>"});
+  $("gridwrap").innerHTML=h+"</table>"}
+ const c=d.cols[S.col],v=R?d.rows[S.row][S.col]:null;
+ $("gfoot").innerHTML=R?`<span>${c[0]} <span style="color:#545d68">${c[1]}</span> · <b>${v==null?"NULL":esc(v)}</b></span><span>row ${S.row+1}/${R} · col ${S.col+1}/${d.cols.length}</span>`:`<span>no rows</span><span>${T.ms}ms</span>`;
+ const m=S.rfilt?["FILTER","type to filter rows","Enter keep","Esc clear"]:S.filtering?["FILTER","type to filter tables","Enter keep","Esc clear"]:S.focus=="side"?["TABLES","j/k move","Enter open","o new tab","/ filter","Ctrl-l results"]:S.rec?["RECORD","j/k prev/next row","Esc back","yy copy value"]:["NORMAL","hjkl move","w/b column","Enter record","gt tab","/ filter","Ctrl-h tables","? help"];
+ $("mode").innerHTML=`<span class="mtag" style="${S.filtering||S.rfilt?"background:var(--t-acc)":S.focus=="side"?"background:var(--t-pri)":S.rec?"background:var(--t-agent)":""}">${m[0]}</span>`+m.slice(1).map(x=>{const [k,...r]=x.split(" ");return `<span><span class="k">${k}</span> ${r.join(" ")}</span>`}).join("");
+}
+$("term").addEventListener("keydown",e=>{
+ const k=e.key,T=TABS[S.tab],R=(S.rq?T.d.rows.filter(r=>r.some(v=>String(v).toLowerCase().includes(S.rq))):T.d.rows).length,C=T.d.cols.length;let used=true;
+ if(S.rfilt){if(k=="Escape"){S.rq="";S.rfilt=false}else if(k=="Enter")S.rfilt=false;else if(k=="Backspace")S.rq=S.rq.slice(0,-1);else if(k.length==1)S.rq+=k.toLowerCase(),S.row=0;else used=false}
+ else if(S.filtering){if(k=="Escape"){S.filter="";S.filtering=false}else if(k=="Enter")S.filtering=false;else if(k=="Backspace")S.filter=S.filter.slice(0,-1);else if(k.length==1)S.filter+=k.toLowerCase(),S.side=0;else used=false}
+ else if(e.ctrlKey&&k=="h"){S.focus="side";S.rec=false}else if(e.ctrlKey&&k=="l")S.focus="grid";
+ else if(S.pend=="g"){S.pend="";if(k=="t")S.tab=(S.tab+1)%TABS.length,S.row=S.col=0,S.rec=false,S.rq="";else if(k=="T")S.tab=(S.tab+TABS.length-1)%TABS.length,S.row=S.col=0,S.rec=false,S.rq="";else if(k=="g"){if(S.focus=="side")S.side=0;else S.row=0}}
+ else if(k=="g")S.pend="g";
+ else if(/^[1-9]$/.test(k)){if(+k<=TABS.length){S.tab=+k-1;S.row=S.col=0;S.rec=false;S.rq=""}}
+ else if(k=="/"){if(S.focus=="side")S.filtering=true;else{S.rfilt=true;S.rq="";S.row=0}}
+ else if(k=="t"){S.focus="side";S.filtering=true;S.filter=""}
+ else if(k=="Escape"){if(S.rec)S.rec=false;else S.filter=""}
+ else if(S.focus=="side"){const n=visTables().length;if(k=="j"||k=="ArrowDown")S.side=Math.min(n-1,S.side+1);else if(k=="k"||k=="ArrowUp")S.side=Math.max(0,S.side-1);else if(k=="G")S.side=n-1;else if(k=="Enter"||k=="o"){const t=visTables()[S.side];if(t){let i=TABS.findIndex(x=>x.title==t.t[0]);if(i<0){const nt=mkTab(t.t);if(k=="o"||TABS[S.tab].agent){TABS.push(nt);i=TABS.length-1}else{TABS[S.tab]=nt;i=S.tab}}S.tab=i;S.focus="grid";S.row=S.col=0;S.rec=false}}else used=false}
+ else{if(k=="j"||k=="ArrowDown")S.row=Math.min(R-1,S.row+1);else if(k=="k"||k=="ArrowUp")S.row=Math.max(0,S.row-1);else if(k=="h"||k=="ArrowLeft"){if(!S.rec)S.col=Math.max(0,S.col-1)}else if(k=="l"||k=="ArrowRight"){if(!S.rec)S.col=Math.min(C-1,S.col+1)}else if(k=="w")S.col=Math.min(C-1,S.col+1);else if(k=="b")S.col=Math.max(0,S.col-1);else if(k=="0")S.col=0;else if(k=="$")S.col=C-1;else if(k=="G")S.row=R-1;else if(k=="Enter")S.rec=!S.rec;else used=false}
+ if(used){e.preventDefault();render()}
+});
+render();
+</script>
+</body></html>
