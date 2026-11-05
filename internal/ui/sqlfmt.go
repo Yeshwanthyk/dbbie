@@ -165,14 +165,8 @@ func (s *state) highlightSQL(text string) string {
 			}
 		case 's':
 			color = s.theme.Success
-		case 'n':
-			color = s.theme.Accent
 		case 'c':
 			color = s.theme.Muted
-		case 'p':
-			if strings.ContainsAny(t.text, "(),;:") {
-				color = s.theme.Muted
-			}
 		}
 		if color == "" {
 			plain.WriteString(t.text)

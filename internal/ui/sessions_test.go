@@ -70,14 +70,14 @@ func TestOpenSessionReadsStoredResultsWithoutRunningSQL(t *testing.T) {
 	if len(s.tabs) != 2 || s.active != 0 || s.current().title != "stored result" || s.grid.GetCell(1, 0).Text != "7" {
 		t.Fatalf("stored tabs not restored: %+v", s.tabs)
 	}
-	if got := s.why.GetText(true); got != "◇ demo #1   inspect stored preview" {
+	if got := s.why.GetText(true); !strings.Contains(got, "◇ demo #1 · ") || !strings.HasSuffix(got, " · inspect stored preview") {
 		t.Fatalf("why=%q", got)
 	}
 	typeKeys(s, "2")
 	if s.current().title != "#3" || !strings.Contains(s.grid.GetCell(0, 0).Text, "no stored result · r to run") || s.current().err != nil {
 		t.Fatal("missing entry should be a runnable placeholder with stable item number")
 	}
-	if got := s.why.GetText(true); got != "◇ demo #3   missing preview" {
+	if got := s.why.GetText(true); got != "◇ demo #3 · missing preview" {
 		t.Fatalf("why=%q", got)
 	}
 }

@@ -197,33 +197,24 @@ func (s *state) agentTab(delta int) {
 	}
 }
 
-// queryTitle names what the tab is: who ran it and why, then its log handle.
+// queryTitle answers "what does this read": the tables, on the pane border.
 func (s *state) queryTitle(t *tab) string {
-	if t.origin == nil {
-		if t.title != "" && t.title != "query" {
-			return " query · " + tview.Escape(t.title) + " "
-		}
-		return " query "
+	if tables := queryTables(t.sql); len(tables) > 0 {
+		return fmt.Sprintf(" [%s::b]▤ %s[-:-:-] ", s.theme.Primary, tview.Escape(strings.Join(tables, ", ")))
 	}
-	parts := []string{"◆ " + t.origin.Actor}
-	if t.origin.Title != "" {
-		parts = append(parts, t.origin.Title)
-	}
-	ts := t.origin.TS.Local()
-	stamp := ts.Format("15:04")
-	if y, m, d := ts.Date(); y != time.Now().Year() || m != time.Now().Month() || d != time.Now().Day() {
-		stamp = ts.Format("2006-01-02 15:04")
-	}
-	parts = append(parts, t.origin.ID+" "+stamp)
-	return " " + tview.Escape(strings.Join(parts, " · ")) + " "
+	return " query "
 }
 
-// queryMeta is the line above the SQL: the tables it touches, then session
-// context and the agent's stated reason.
+// queryMeta is one muted line of provenance: who ran it, its title, the
+// session item, log handle and the agent's stated reason.
 func (s *state) queryMeta(t *tab) string {
 	var parts []string
-	if tables := queryTables(t.sql); len(tables) > 0 {
-		parts = append(parts, fmt.Sprintf("[%s::b]▤ %s[-:-:-]", s.theme.Primary, tview.Escape(strings.Join(tables, ", "))))
+	lead := ""
+	if t.origin != nil {
+		lead = fmt.Sprintf("[%s]◆ %s[-]", s.theme.Agent, tview.Escape(t.origin.Actor))
+		if t.origin.Title != "" {
+			parts = append(parts, t.origin.Title)
+		}
 	}
 	session, why := t.sessionName, t.why
 	if session == "" && t.origin != nil {
@@ -237,13 +228,29 @@ func (s *state) queryMeta(t *tab) string {
 		if t.itemN > 0 {
 			label += fmt.Sprintf(" #%d", t.itemN)
 		}
-		parts = append(parts, fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(label)))
-	}
-	if why != "" {
-		parts = append(parts, fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Muted, tview.Escape(why)))
+		parts = append(parts, label)
 	}
 	if t.origin != nil {
+		ts := t.origin.TS.Local()
+		stamp := ts.Format("15:04")
+		if y, m, d := ts.Date(); y != time.Now().Year() || m != time.Now().Month() || d != time.Now().Day() {
+			stamp = ts.Format("2006-01-02 15:04")
+		}
+		parts = append(parts, t.origin.ID+" "+stamp)
 		s.agentNotice = ""
 	}
-	return strings.Join(parts, "   ")
+	if why != "" {
+		parts = append(parts, why)
+	}
+	if lead == "" && len(parts) == 0 {
+		return ""
+	}
+	text := fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Muted, tview.Escape(strings.Join(parts, " · ")))
+	if lead != "" {
+		if len(parts) == 0 {
+			return lead
+		}
+		return lead + fmt.Sprintf("[%s] · [-]", s.theme.Muted) + text
+	}
+	return text
 }
