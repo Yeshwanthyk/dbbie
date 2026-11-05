@@ -227,7 +227,7 @@ func runSession(ctx context.Context, s *session.Session, only, limit int, timeou
 		if only != 0 && item.N != only {
 			continue
 		}
-		result, entry, err := executeQuery(ctx, queryRun{Spec: dbSpec{ConnName: s.Conn}, SQL: item.SQL, Title: item.Title, Why: item.Why, Actor: actor, Session: s.Name, Limit: limit, Timeout: timeout, Secrets: secrets})
+		result, entry, err := executeQuery(ctx, queryRun{Spec: dbSpec{ConnName: s.Conn}, SQL: item.SQL, Title: item.Title, Why: item.Why, Actor: actor, Session: s.Name, Item: item.N, Limit: limit, Timeout: timeout, Secrets: secrets})
 		if entry.ID != "" {
 			if updateErr := session.SetLogID(s.Name, item.N, entry.ID); updateErr != nil {
 				err = commandError(errorCodeOrInvalid(err), joinRunError(err, "could not update session logId: "+updateErr.Error()))

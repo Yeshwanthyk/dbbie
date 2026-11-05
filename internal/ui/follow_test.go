@@ -38,7 +38,7 @@ func TestFollowCreatesStoredTabWithoutRunningSQL(t *testing.T) {
 		t.Fatalf("stored result lost: %+v", s.current().result)
 	}
 	_, text := drawShell(t, s)
-	for _, want := range []string{"◆", "AGENT", "agent", "q_0042", "2026-11-03", "currencies", "why: check account currencies", "USD"} {
+	for _, want := range []string{"◆", "AGENT", "agent", "q_0042", "2026-11-03", "currencies", "check account currencies", "USD"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q on screen:\n%s", want, text)
 		}

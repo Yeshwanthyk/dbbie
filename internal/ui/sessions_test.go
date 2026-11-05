@@ -70,14 +70,14 @@ func TestOpenSessionReadsStoredResultsWithoutRunningSQL(t *testing.T) {
 	if len(s.tabs) != 2 || s.active != 0 || s.current().title != "stored result" || s.grid.GetCell(1, 0).Text != "7" {
 		t.Fatalf("stored tabs not restored: %+v", s.tabs)
 	}
-	if got := s.why.GetText(true); got != "session demo · #1 · inspect stored preview" {
+	if got := s.why.GetText(true); !strings.Contains(got, "◇ demo #1 · ") || !strings.HasSuffix(got, " · inspect stored preview") {
 		t.Fatalf("why=%q", got)
 	}
 	typeKeys(s, "2")
 	if s.current().title != "#3" || !strings.Contains(s.grid.GetCell(0, 0).Text, "no stored result · r to run") || s.current().err != nil {
 		t.Fatal("missing entry should be a runnable placeholder with stable item number")
 	}
-	if got := s.why.GetText(true); got != "session demo · #3 · missing preview" {
+	if got := s.why.GetText(true); got != "◇ demo #3 · missing preview" {
 		t.Fatalf("why=%q", got)
 	}
 }
@@ -292,7 +292,7 @@ func TestFollowTabDisplaysSessionName(t *testing.T) {
 	e := agentEntry("q_0010")
 	e.Session = "refund-bug"
 	s.receiveEntry(e)
-	if !strings.Contains(s.why.GetText(true), "session refund-bug") || !strings.Contains(s.header.GetText(true), "◆ refund-bug") {
+	if !strings.Contains(s.why.GetText(true), "◇ refund-bug") || !strings.Contains(s.header.GetText(true), "◆ refund-bug") {
 		t.Fatal("follow session attribution missing")
 	}
 }
@@ -548,5 +548,36 @@ func TestRerunShowsResultWhenSessionItemIsGone(t *testing.T) {
 	}
 	if !strings.Contains(s.message, "was not updated") {
 		t.Fatalf("missing warning: %s", s.message)
+	}
+}
+
+func TestSessionRerunEntryRefreshesOpenTabInPlace(t *testing.T) {
+	s := sessionState(t, nil)
+	s.followEnabled = false // session refresh must not depend on --follow
+	old := createTrail(t, s, "demo")
+	if _, err := session.Add("demo", session.Item{SQL: "select 9", Title: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	s.openSession("demo")
+	tabs := len(s.tabs)
+	fresh := qlog.Entry{ID: "q_9001", Conn: "local", Source: "cli", Actor: "agent", Session: "demo", Item: 1,
+		SQL: "select 7", Columns: []query.Column{{Name: "stored"}}, Rows: [][]any{{8}}, RowCount: 1}
+	s.receiveEntry(fresh)
+	if len(s.tabs) != tabs || s.active != 0 || s.current().logID != "q_9001" || s.grid.GetCell(1, 0).Text != "8" {
+		t.Fatalf("rerun did not refresh tab #1 in place: tabs=%d logID=%s cell=%q", len(s.tabs), s.current().logID, s.grid.GetCell(1, 0).Text)
+	}
+	if !strings.Contains(s.message, "↻ #1 refreshed by agent") || s.current().logID == old.ID {
+		t.Fatalf("message=%q", s.message)
+	}
+	other := qlog.Entry{ID: "q_9002", Conn: "local", Source: "cli", Actor: "agent", SQL: "select 1"}
+	s.receiveEntry(other)
+	if len(s.tabs) != tabs {
+		t.Fatal("without --follow, unrelated entries must not open tabs")
+	}
+	wrongConn := fresh
+	wrongConn.ID, wrongConn.Conn = "q_9003", "prod"
+	s.receiveEntry(wrongConn)
+	if s.current().logID != "q_9001" {
+		t.Fatal("an entry from another connection must not refresh this session")
 	}
 }

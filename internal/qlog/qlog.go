@@ -33,6 +33,7 @@ type Entry struct {
 	Conn      string         `json:"conn"`
 	Driver    string         `json:"driver"`
 	Session   string         `json:"session,omitempty"`
+	Item      int            `json:"item,omitempty"` // session item N this run refreshes
 	Source    string         `json:"source"`
 	Actor     string         `json:"actor"`
 	Title     string         `json:"title"`

@@ -41,8 +41,8 @@ func (s *state) layout() tview.Primitive {
 	s.status.SetBackgroundColor(s.theme.TCell(s.theme.Background))
 	s.header.SetWrap(false)
 	s.status.SetWrap(false)
-	s.sqlView.SetWrap(true).SetWordWrap(false)
-	s.why.SetWrap(true)
+	s.sqlView.SetWrap(true).SetWordWrap(true)
+	s.why.SetWrap(false)
 	s.grid = tview.NewTable().SetBorders(false).SetSeparator('│').SetSelectable(true, true).SetFixed(1, 0).
 		SetSelectedStyle(s.theme.CellStyle(s.theme.Background, s.theme.Primary))
 	// Padded headers pin column widths, so tview need only measure visible rows.
@@ -64,7 +64,9 @@ func (s *state) layout() tview.Primitive {
 	s.sidebar.SetBackgroundColor(s.theme.TCell(s.theme.Panel))
 	s.query = s.input("").SetChangedFunc(func(text string) {
 		s.current().sql = text
-		s.sqlView.SetText(tview.Escape(text))
+		s.sqlView.SetText(s.renderSQL(text))
+		s.sqlRendered = [2]string{}
+		s.why.SetText(s.queryMeta(s.current()))
 	}).SetDoneFunc(func(key tcell.Key) { s.finishQueryEdit(key == tcell.KeyEnter) })
 	s.command = s.input(":").SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
@@ -99,7 +101,8 @@ func (s *state) layout() tview.Primitive {
 	s.prompts = tview.NewFlex()
 	s.modeLine = tview.NewFlex().AddItem(s.status, 0, 1, false).AddItem(s.prompts, 0, 0, false)
 	s.right = tview.NewFlex().SetDirection(tview.FlexRow).AddItem(s.queryPane, 3, 0, false).AddItem(s.resultPane, 0, 1, true)
-	s.body = tview.NewFlex().AddItem(s.sidePane, 32, 0, true).AddItem(nil, 1, 0, false).AddItem(s.right, 0, 1, false)
+	s.sideGap = tview.NewBox().SetBackgroundColor(s.theme.TCell(s.theme.Background))
+	s.body = tview.NewFlex().AddItem(s.sidePane, 32, 0, true).AddItem(s.sideGap, 1, 0, false).AddItem(s.right, 0, 1, false)
 	mode := &modeFrame{Flex: s.modeLine, state: s}
 	root := &shellFrame{Flex: tview.NewFlex().SetDirection(tview.FlexRow).AddItem(s.header, 1, 0, false).AddItem(s.body, 0, 1, true).AddItem(mode, 1, 0, false), state: s}
 	s.pages = tview.NewPages().AddPage("main", root, true, true)
@@ -135,6 +138,7 @@ func (s *state) focusResults() {
 
 func (s *state) focusTables() {
 	s.pendingKey = 0
+	s.hideTables, s.zoomResults = false, false
 	s.queryPages.SwitchToPage("sql")
 	s.app.SetFocus(s.sidebar)
 }
@@ -143,6 +147,7 @@ func (s *state) focusQuery() {
 	if s.current().origin != nil || s.current().sessionName != "" {
 		s.newTab("query", s.current().sql, nil)
 	}
+	s.zoomResults = false
 	s.editOriginal, s.editing = s.query.GetText(), true
 	// tview InputField has no select-all. Start a replacement draft, but keep
 	// the original intact for Esc so a new query never appends to the old SQL.
@@ -170,7 +175,7 @@ func (s *state) refreshMode() {
 		return
 	}
 	focus := s.app.GetFocus()
-	mode, color, hints := "NORMAL", s.theme.Success, "hjkl move · Enter record · / filter · i SQL · gt tab · yy/Y copy · s/S sort · ? help"
+	mode, color, hints := "NORMAL", s.theme.Success, "hjkl move · Enter record · / filter · i SQL · z/Z zoom · gt tab · yy/Y copy · s/S sort · ? help"
 	if s.current().rowFilter != "" || s.current().equalFilter != nil {
 		hints = "n/N match · Esc clear · / filter · Enter record · i SQL · ? help"
 	}

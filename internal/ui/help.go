@@ -34,6 +34,7 @@ var helpLeft = []helpKey{
 	{"Ctrl-c", "cancel query; quit if idle"},
 	{"? / Esc", "help / close overlay"},
 	{"Tab", "focus results"},
+	{"z / Z", "hide tables / results only"},
 	{"", ""},
 	{"", "TABLES"},
 	{"j / k · ↑ / ↓", "move through tables"},

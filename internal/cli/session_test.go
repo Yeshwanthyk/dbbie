@@ -248,8 +248,9 @@ func TestSessionRunReadOnlyUpdatesLogIDsAndContinuesAfterRejection(t *testing.T)
 	if len(entries) != 3 {
 		t.Fatalf("entries: %+v", entries)
 	}
-	for _, e := range entries {
-		if e.Session != "trail" || e.Actor != "agent" {
+	for i, e := range entries {
+		// Item lets an open TUI refresh the matching session tab in place.
+		if e.Session != "trail" || e.Actor != "agent" || e.Item != s.Items[i].N {
 			t.Fatalf("entry: %+v", e)
 		}
 	}

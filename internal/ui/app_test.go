@@ -210,6 +210,9 @@ func newTestState(t *testing.T, conn *sql.DB) *state {
 		Theme: resolved,
 		Limit: query.DefaultPreviewLimit,
 	})
+	// Entries reach receiveEntry only from the log tail; most tests exercise
+	// --follow. Session-refresh tests turn it off explicitly.
+	s.followEnabled = true
 	s.runner = func(ctx context.Context, work queryWork, _ func(), done func(query.Result, error)) {
 		result, err := work(ctx)
 		done(result, err)

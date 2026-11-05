@@ -104,7 +104,7 @@ func ensureSession(name string, spec dbSpec, actor string) error {
 type queryRun struct {
 	Spec                            dbSpec
 	SQL, Title, Why, Actor, Session string
-	Limit                           int
+	Limit, Item                     int
 	Timeout                         time.Duration
 	AllowWrite, NoLog               bool
 	InitialError                    error
@@ -120,7 +120,7 @@ func executeQuery(ctx context.Context, opts queryRun) (query.Result, qlog.Entry,
 	if connName == "" {
 		connName = "adhoc"
 	}
-	entry := qlog.Entry{Conn: connName, Driver: opts.Spec.Driver, Source: "cli", Actor: opts.Actor, Title: opts.Title, Why: opts.Why, SQL: opts.SQL, Session: opts.Session}
+	entry := qlog.Entry{Conn: connName, Driver: opts.Spec.Driver, Source: "cli", Actor: opts.Actor, Title: opts.Title, Why: opts.Why, SQL: opts.SQL, Session: opts.Session, Item: opts.Item}
 	var result query.Result
 	if runErr == nil {
 		if strings.TrimSpace(opts.SQL) == "" {

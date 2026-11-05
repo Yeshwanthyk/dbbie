@@ -101,6 +101,7 @@ JSON is the default when stdout is not a terminal; --json=false prints human-rea
 DBBIE_SESSION selects query's default session; --session overrides it. Sessions require a saved connection
 and query logging. session run is always read-only and logged, including rejected/failed runs.
 open --session uses the session connection and stored results; it never re-runs SQL on open.
+An open TUI refreshes a session tab in place when that item is re-run (session run, or r in another TUI).
 open without credentials picks a saved connection (one opens directly; none requires --conn/--dsn).
 In the TUI: r re-runs read-only and logged; :save <name> [title], :add, :sessions, :conn.`)
 }

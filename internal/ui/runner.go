@@ -104,7 +104,7 @@ func (s *state) runTabQuery(sqlText string, forceLog bool) {
 	s.refreshHeader()
 	// Capture only immutable inputs; a worker must never read mutable UI state.
 	conn, limit, log, noLog := s.db, s.limit, s.log, s.noLog
-	kind, title, why, sessionName := s.kind, t.title, t.why, t.sessionName
+	kind, title, why, sessionName, itemN := s.kind, t.title, t.why, t.sessionName, t.itemN
 	redact := s.redactStrings
 	if t.origin != nil && sessionName == "" {
 		sessionName = t.origin.Session
@@ -114,6 +114,9 @@ func (s *state) runTabQuery(sqlText string, forceLog bool) {
 		result, err := (query.Runner{DB: conn}).Run(ctx, query.Options{SQL: sqlText, Limit: limit, Timeout: 15 * time.Second, ReadOnly: true})
 		e := humanEntry(kind, title, sqlText, result, err, time.Since(start))
 		e.Why, e.Session = why, sessionName
+		if t.sessionName != "" {
+			e.Item = itemN
+		}
 		if redactErr := sanitizeLogEntry(&e, redact); redactErr != nil {
 			return query.Result{}, fmt.Errorf("query completed but could not safely redact its result")
 		}

@@ -17,17 +17,31 @@ type shellFrame struct {
 func (f *shellFrame) Draw(screen tcell.Screen) {
 	s := f.state
 	_, _, width, height := f.GetRect()
-	side := min(s.sideWidth, max(20, width/3))
+	side, gap := min(s.sideWidth, max(20, width/3)), 1
+	if s.hideTables || s.zoomResults {
+		side, gap = 0, 0
+	} else {
+		s.fitSidebar(max(1, side-4))
+	}
 	s.body.ResizeItem(s.sidePane, side, 0)
-	s.fitSidebar(max(1, side-4))
-	queryWidth := max(1, width-side-5)
-	sqlHeight := min(3, wrappedLines(s.current().sql, queryWidth))
+	s.body.ResizeItem(s.sideGap, gap, 0)
+	queryWidth := max(1, width-side-gap-4)
+	display := wrapSQL(layoutSQL(s.current().sql), queryWidth)
+	if key := [2]string{display, s.theme.Name}; key != s.sqlRendered {
+		s.sqlRendered = key
+		s.sqlView.SetText(s.highlightSQL(display))
+	}
+	sqlHeight := min(8, wrappedLines(display, queryWidth))
 	whyHeight := 0
 	if s.why.GetText(true) != "" {
-		whyHeight = min(2, wrappedLines(s.why.GetText(true), queryWidth))
+		whyHeight = 1
 	}
 	s.queryPane.ResizeItem(s.why, whyHeight, 0)
-	s.right.ResizeItem(s.queryPane, min(2+sqlHeight+whyHeight, max(3, height/3)), 0)
+	queryHeight := min(2+sqlHeight+whyHeight, max(3, height/3))
+	if s.zoomResults {
+		queryHeight = 0
+	}
+	s.right.ResizeItem(s.queryPane, queryHeight, 0)
 	s.headerWidth = width
 	s.refreshHeaderWidth(width)
 	f.Flex.Draw(screen)
