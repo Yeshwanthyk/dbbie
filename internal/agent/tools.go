@@ -96,7 +96,7 @@ func Tools() []Tool {
 		},
 		{
 			Name:        "run_session",
-			Description: "Re-run ordered items read-only; log every success, failure and rejection with the session name and update each logId. Continues after item failures and exits nonzero if any failed. JSON is one object with items (n, logId, result, error) and a top-level error on failure. DBBIE_NO_LOG does not disable session re-run logging.",
+			Description: "Re-run ordered items read-only; log every success, failure and rejection with the session name and update each logId. Continues after item failures and exits nonzero if any failed. JSON is one object with items (n, logId, result, error) and a top-level error on failure. DBBIE_NO_LOG does not disable session re-run logging. A human with the session open in the TUI sees each item's tab refresh in place; use this (or --only N) to update what they are looking at.",
 			Command:     []string{"dbbie", "session", "run", "$session", "--json"},
 			Inputs:      map[string]string{"session": "session name", "only": "optional --only positive stable item number", "limit": "optional --limit N, default 100, max 1000", "timeout": "optional --timeout duration, default 10s per item"},
 			Safety:      "always read-only, timeout-bound and bounded; no --allow-write",

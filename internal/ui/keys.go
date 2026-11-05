@@ -185,6 +185,12 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 	case '?':
 		s.toggleHelp()
 		return nil
+	case 'z':
+		s.toggleTables()
+		return nil
+	case 'Z':
+		s.toggleZoom()
+		return nil
 	case '/':
 		if focus == s.sidebar {
 			s.app.SetFocus(s.tableFilter)
@@ -254,6 +260,26 @@ func (s *state) captureInput(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	}
 	return event
+}
+
+// z hides the tables sidebar; Z gives the results the whole body. Focus never
+// stays on a hidden pane. Ctrl-h, t and i bring their pane back.
+func (s *state) toggleTables() {
+	if s.zoomResults {
+		s.zoomResults, s.hideTables = false, false
+	} else {
+		s.hideTables = !s.hideTables
+	}
+	if s.hideTables && (s.app.GetFocus() == s.sidebar || s.app.GetFocus() == s.tableFilter) {
+		s.focusResults()
+	}
+}
+
+func (s *state) toggleZoom() {
+	s.zoomResults = !s.zoomResults
+	if s.zoomResults {
+		s.focusResults()
+	}
 }
 
 func (s *state) moveSidebar(delta int) {

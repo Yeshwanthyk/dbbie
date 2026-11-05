@@ -81,31 +81,10 @@ func (s *state) closeTab() {
 func (s *state) showTab() {
 	t := s.current()
 	s.query.SetText(t.sql)
-	s.sqlView.SetText(tview.Escape(t.sql))
-	why := ""
-	s.queryPane.SetTitle(" query ")
-	if t.origin != nil {
-		s.queryPane.SetTitle(fmt.Sprintf(" query · ◆ agent · %s · %s ", tview.Escape(t.origin.ID), t.origin.TS.Local().Format("2006-01-02 15:04")))
-		parts := []string{t.origin.Actor}
-		if t.origin.Title != "" {
-			parts = append(parts, t.origin.Title)
-		}
-		if t.origin.Session != "" {
-			parts = append(parts, "session "+t.origin.Session)
-		}
-		if t.origin.Why != "" {
-			parts = append(parts, "why: "+t.origin.Why)
-		}
-		why = fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(strings.Join(parts, " · ")))
-		s.agentNotice = ""
-	}
-	if t.sessionName != "" {
-		text := fmt.Sprintf("session %s · #%d", t.sessionName, t.itemN)
-		if t.why != "" {
-			text += " · " + t.why
-		}
-		why = fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(text))
-	}
+	s.sqlView.SetText(s.renderSQL(t.sql))
+	s.sqlRendered = [2]string{}
+	s.queryPane.SetTitle(s.queryTitle(t))
+	why := s.queryMeta(t)
 	s.why.SetText(why)
 	whyHeight := 0
 	if why != "" {
@@ -216,4 +195,55 @@ func (s *state) agentTab(delta int) {
 			return
 		}
 	}
+}
+
+// queryTitle names what the tab is: who ran it and why, then its log handle.
+func (s *state) queryTitle(t *tab) string {
+	if t.origin == nil {
+		if t.title != "" && t.title != "query" {
+			return " query · " + tview.Escape(t.title) + " "
+		}
+		return " query "
+	}
+	parts := []string{"◆ " + t.origin.Actor}
+	if t.origin.Title != "" {
+		parts = append(parts, t.origin.Title)
+	}
+	ts := t.origin.TS.Local()
+	stamp := ts.Format("15:04")
+	if y, m, d := ts.Date(); y != time.Now().Year() || m != time.Now().Month() || d != time.Now().Day() {
+		stamp = ts.Format("2006-01-02 15:04")
+	}
+	parts = append(parts, t.origin.ID+" "+stamp)
+	return " " + tview.Escape(strings.Join(parts, " · ")) + " "
+}
+
+// queryMeta is the line above the SQL: the tables it touches, then session
+// context and the agent's stated reason.
+func (s *state) queryMeta(t *tab) string {
+	var parts []string
+	if tables := queryTables(t.sql); len(tables) > 0 {
+		parts = append(parts, fmt.Sprintf("[%s::b]▤ %s[-:-:-]", s.theme.Primary, tview.Escape(strings.Join(tables, ", "))))
+	}
+	session, why := t.sessionName, t.why
+	if session == "" && t.origin != nil {
+		session = t.origin.Session
+	}
+	if t.origin != nil && why == "" {
+		why = t.origin.Why
+	}
+	if session != "" {
+		label := "◇ " + session
+		if t.itemN > 0 {
+			label += fmt.Sprintf(" #%d", t.itemN)
+		}
+		parts = append(parts, fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Agent, tview.Escape(label)))
+	}
+	if why != "" {
+		parts = append(parts, fmt.Sprintf("[%s]%s[-:-:-]", s.theme.Muted, tview.Escape(why)))
+	}
+	if t.origin != nil {
+		s.agentNotice = ""
+	}
+	return strings.Join(parts, "   ")
 }

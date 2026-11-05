@@ -23,9 +23,6 @@ func (s *state) prepareLog(follow bool, recent int) error {
 		return fmt.Errorf("could not open query log: %w", err)
 	}
 	s.log = l
-	if !follow {
-		return nil
-	}
 	// Take the offset before listing: entries appended during startup are
 	// either restored or followed, never lost. IDs deduplicate the overlap.
 	s.logOffset, err = l.Size()
@@ -84,6 +81,11 @@ func (s *state) receiveEntry(e qlog.Entry) {
 	// so following our own log never creates a duplicate tab.
 	if e.Source == "tui" && e.Actor == "human" && s.pending > 0 {
 		s.deferred = append(s.deferred, e)
+		return
+	}
+	if s.seen[e.ID] || s.refreshSessionTab(e) || !s.followEnabled {
+		// The log is always tailed so session reruns land in place; only
+		// --follow opens unrelated entries as new tabs.
 		return
 	}
 	if !s.appendEntry(e) {
@@ -151,4 +153,36 @@ func (s *state) stopWhenDrained() {
 	if s.quitting && s.pending == 0 && s.followWorkers == 0 && !s.startupPending {
 		s.app.Stop()
 	}
+}
+
+// refreshSessionTab swaps a rerun of a session item (`dbbie session run`, or
+// another TUI) into the open tab for that item, keeping its place in the tab
+// bar. A query the human is running in that tab wins over the incoming entry.
+func (s *state) refreshSessionTab(e qlog.Entry) bool {
+	if e.Session == "" || e.Item <= 0 || e.Conn != s.connection {
+		return false
+	}
+	for i, t := range s.tabs {
+		if t.sessionName != e.Session || t.itemN != e.Item {
+			continue
+		}
+		s.seen[e.ID] = true
+		if t.cancel != nil {
+			return true
+		}
+		fresh := storedTab(e)
+		t.result, t.err, t.notice = fresh.result, fresh.err, ""
+		t.sql, t.logID, t.logConn = e.SQL, e.ID, e.Conn
+		if t.origin != nil {
+			t.origin = fresh.origin
+		}
+		t.rowFilter, t.equalFilter, t.sorted, t.record = "", nil, false, false
+		if i == s.active && !s.typing() && !s.helpOpen {
+			s.showTab()
+		}
+		s.refreshHeader()
+		s.setMessage(fmt.Sprintf("↻ #%d refreshed by %s · %s", e.Item, e.Actor, e.ID))
+		return true
+	}
+	return false
 }

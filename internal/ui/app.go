@@ -88,7 +88,7 @@ func (s *state) configureStartup(initialSQL string, follow bool) {
 					s.pickConnections()
 				} else {
 					s.runInitialSQL(initialSQL)
-					if follow {
+					if s.log != nil {
 						s.startFollow()
 					}
 				}
@@ -200,6 +200,9 @@ type state struct {
 	tables                                     []catalog.Table
 	visibleTables                              []catalog.Table
 	sideWidth                                  int
+	sideGap                                    *tview.Box
+	hideTables, zoomResults                    bool
+	sqlRendered                                [2]string
 	multiSchema                                bool
 	pendingKey                                 rune
 	helpOpen                                   bool

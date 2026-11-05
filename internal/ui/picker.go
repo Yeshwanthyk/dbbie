@@ -169,8 +169,10 @@ func (s *state) switchConnection(name string, after func()) {
 		}
 		if !noLog || follow {
 			log, err = qlog.Open(name)
-			if err == nil && follow {
+			if err == nil {
 				offset, err = log.Size()
+			}
+			if err == nil && follow {
 				if err == nil && startup && recent > 0 {
 					recentEntries, err = log.List(recent)
 				}
@@ -222,7 +224,7 @@ func (s *state) switchConnection(name string, after func()) {
 			s.initialSQL = ""
 			s.runInitialSQL(initial)
 		}
-		if follow {
+		if s.log != nil {
 			s.startFollow()
 		}
 	})
